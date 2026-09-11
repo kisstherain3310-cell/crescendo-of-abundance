@@ -28,6 +28,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${notoSans.variable} ${notoSerif.variable} h-full antialiased`}
     >
       <head>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <Script src="/frost-boot.js" strategy="beforeInteractive" />
       </head>
       <body className="min-h-full overflow-hidden bg-[#14080b] font-sans">

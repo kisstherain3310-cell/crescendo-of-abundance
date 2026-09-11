@@ -37,9 +37,9 @@
     ctx.setTransform(metrics.dpr, 0, 0, metrics.dpr, 0, 0);
     ctx.globalCompositeOperation = "source-over";
     var gradient = ctx.createLinearGradient(0, 0, metrics.width, metrics.height);
-    gradient.addColorStop(0, "rgba(236, 246, 255, 0.88)");
-    gradient.addColorStop(0.45, "rgba(214, 232, 245, 0.9)");
-    gradient.addColorStop(1, "rgba(198, 220, 236, 0.92)");
+    gradient.addColorStop(0, "rgba(236, 246, 255, 0.58)");
+    gradient.addColorStop(0.45, "rgba(214, 232, 245, 0.62)");
+    gradient.addColorStop(1, "rgba(198, 220, 236, 0.66)");
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, metrics.width, metrics.height);
     ctx.globalAlpha = 0.55;

@@ -7,10 +7,10 @@ import {
 } from "@/lib/types";
 import { clamp, lerp, median } from "@/lib/utils";
 
-const DEFAULT_GRAVITY = 0.72;
-const CRASH_GRAVITY = 2.05;
-const DEFAULT_RESTITUTION = 0.82;
-const CRASH_RESTITUTION = 0.18;
+const DEFAULT_GRAVITY = 0.16;
+const CRASH_GRAVITY = 0.38;
+const DEFAULT_RESTITUTION = 0.74;
+const CRASH_RESTITUTION = 0.4;
 
 export function volumeToBodyCount(
   volumeKg: number,

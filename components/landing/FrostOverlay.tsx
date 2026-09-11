@@ -7,7 +7,7 @@ type FrostOverlayProps = {
   onWipedChange: (wiped: boolean) => void;
 };
 
-const BRUSH = 64;
+const BRUSH = 46;
 const TAP_THRESHOLD = 10;
 
 function brushAt(
@@ -61,8 +61,8 @@ export function FrostOverlay({ onTap, onWipedChange }: FrostOverlayProps) {
       canvas.height = Math.max(1, Math.floor(rect.height * dpr));
       ctxFill.setTransform(dpr, 0, 0, dpr, 0, 0);
       const gradient = ctxFill.createLinearGradient(0, 0, rect.width, rect.height);
-      gradient.addColorStop(0, "rgba(236, 246, 255, 0.88)");
-      gradient.addColorStop(1, "rgba(198, 220, 236, 0.92)");
+      gradient.addColorStop(0, "rgba(236, 246, 255, 0.58)");
+      gradient.addColorStop(1, "rgba(198, 220, 236, 0.66)");
       ctxFill.globalCompositeOperation = "source-over";
       ctxFill.fillStyle = gradient;
       ctxFill.fillRect(0, 0, rect.width, rect.height);
