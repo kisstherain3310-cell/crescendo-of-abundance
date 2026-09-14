@@ -1,14 +1,52 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { isFrostUiTarget } from "@/lib/frostUi";
 
 type FrostOverlayProps = {
+  revealed: boolean;
   onTap: (clientX: number, clientY: number) => void;
-  onWipedChange: (wiped: boolean) => void;
+  onRevealed: () => void;
 };
 
-const BRUSH = 46;
+const BRUSH = 56;
 const TAP_THRESHOLD = 10;
+const FROST_ALPHA = 18;
+
+function fillFrost(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+) {
+  const gradient = ctx.createLinearGradient(0, 0, width, height);
+  gradient.addColorStop(0, "rgba(236, 246, 255, 0.4)");
+  gradient.addColorStop(0.45, "rgba(214, 232, 245, 0.44)");
+  gradient.addColorStop(1, "rgba(198, 220, 236, 0.48)");
+  ctx.globalCompositeOperation = "source-over";
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+
+  const noise = document.createElement("canvas");
+  noise.width = 128;
+  noise.height = 128;
+  const nctx = noise.getContext("2d");
+  if (nctx) {
+    const image = nctx.createImageData(128, 128);
+    for (let i = 0; i < image.data.length; i += 4) {
+      const v = 210 + Math.random() * 40;
+      image.data[i] = v;
+      image.data[i + 1] = v + 10;
+      image.data[i + 2] = v + 18;
+      image.data[i + 3] = 50 + Math.random() * 40;
+    }
+    nctx.putImageData(image, 0, 0);
+    ctx.globalAlpha = 0.32;
+    ctx.fillStyle = ctx.createPattern(noise, "repeat") || gradient;
+    ctx.fillRect(0, 0, width, height);
+    ctx.globalAlpha = 1;
+  }
+}
 
 function brushAt(
   ctx: CanvasRenderingContext2D,
@@ -16,9 +54,9 @@ function brushAt(
   y: number,
   radius: number,
 ) {
-  const gradient = ctx.createRadialGradient(x, y, radius * 0.15, x, y, radius);
+  const gradient = ctx.createRadialGradient(x, y, radius * 0.12, x, y, radius);
   gradient.addColorStop(0, "rgba(0,0,0,1)");
-  gradient.addColorStop(0.65, "rgba(0,0,0,0.55)");
+  gradient.addColorStop(0.55, "rgba(0,0,0,0.85)");
   gradient.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = gradient;
   ctx.beginPath();
@@ -26,70 +64,87 @@ function brushAt(
   ctx.fill();
 }
 
-export function FrostOverlay({ onTap, onWipedChange }: FrostOverlayProps) {
-  const hostRef = useRef<HTMLDivElement>(null);
+function teardownBootLayer() {
+  const boot = window.__FROST_BOOT__;
+  boot?.canvas?.remove();
+  document.getElementById("frost-boot-ui")?.remove();
+  if (boot) {
+    boot.canvas = undefined;
+  }
+}
+
+export function FrostOverlay({
+  revealed,
+  onTap,
+  onRevealed,
+}: FrostOverlayProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const onTapRef = useRef(onTap);
-  const onWipedChangeRef = useRef(onWipedChange);
+  const onRevealedRef = useRef(onRevealed);
+  const revealedRef = useRef(revealed);
+  const runtimeRef = useRef<{ clearAll: () => void } | null>(null);
+
   onTapRef.current = onTap;
-  onWipedChangeRef.current = onWipedChange;
+  onRevealedRef.current = onRevealed;
+  revealedRef.current = revealed;
 
   useEffect(() => {
-    const host = hostRef.current;
-    if (!host) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-    const boot = window.__FROST_BOOT__;
-    const existing = boot?.canvas ?? document.getElementById("frost-boot-canvas");
-    const canvas =
-      existing instanceof HTMLCanvasElement
-        ? existing
-        : document.createElement("canvas");
-    if (!(existing instanceof HTMLCanvasElement)) {
-      canvas.id = "frost-boot-canvas";
-      canvas.setAttribute("aria-hidden", "true");
-    }
-    if (canvas.parentElement !== host) {
-      host.appendChild(canvas);
-    }
-
-    const fillIfNeeded = () => {
-      if (canvas.dataset.frostFilled === "1") return;
-      const ctxFill = canvas.getContext("2d");
-      if (!ctxFill) return;
-      const rect = host.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-      canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-      ctxFill.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const gradient = ctxFill.createLinearGradient(0, 0, rect.width, rect.height);
-      gradient.addColorStop(0, "rgba(236, 246, 255, 0.58)");
-      gradient.addColorStop(1, "rgba(198, 220, 236, 0.66)");
-      ctxFill.globalCompositeOperation = "source-over";
-      ctxFill.fillStyle = gradient;
-      ctxFill.fillRect(0, 0, rect.width, rect.height);
-      canvas.dataset.frostFilled = "1";
-    };
-    fillIfNeeded();
-
-    canvas.style.position = "absolute";
-    canvas.style.inset = "0";
-    canvas.style.width = "100%";
-    canvas.style.height = "100%";
-    canvas.style.zIndex = "30";
-    canvas.style.touchAction = "none";
-    canvas.style.cursor = "crosshair";
-    canvas.style.display = "block";
-
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) return;
 
-    let wiped = false;
+    let wiped = Boolean(window.__FROST_BOOT__?.cleared);
     let pointerId: number | null = null;
     let startX = 0;
     let startY = 0;
     let moved = 0;
     let lastX = 0;
     let lastY = 0;
-    let strokeCells = 0;
+    let dpr = 1;
+
+    const markRevealed = () => {
+      if (wiped) return;
+      wiped = true;
+      onRevealedRef.current();
+    };
+
+    const syncSize = () => {
+      const rect = canvas.getBoundingClientRect();
+      const cssWidth = Math.max(1, rect.width || window.innerWidth);
+      const cssHeight = Math.max(1, rect.height || window.innerHeight);
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.max(1, Math.floor(cssWidth * dpr));
+      canvas.height = Math.max(1, Math.floor(cssHeight * dpr));
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      return { cssWidth, cssHeight };
+    };
+
+    const clearAll = () => {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+      canvas.style.pointerEvents = "none";
+      markRevealed();
+    };
+
+    const boot = window.__FROST_BOOT__;
+    if (revealedRef.current || boot?.cleared) {
+      syncSize();
+      clearAll();
+    } else {
+      const { cssWidth, cssHeight } = syncSize();
+      if (boot?.canvas && boot.filled) {
+        ctx.drawImage(boot.canvas, 0, 0, cssWidth, cssHeight);
+      } else {
+        fillFrost(ctx, cssWidth, cssHeight);
+      }
+    }
+    teardownBootLayer();
+
+    runtimeRef.current = { clearAll };
 
     const localPoint = (event: PointerEvent) => {
       const rect = canvas.getBoundingClientRect();
@@ -99,29 +154,40 @@ export function FrostOverlay({ onTap, onWipedChange }: FrostOverlayProps) {
       };
     };
 
-    const stamp = (x: number, y: number) => {
-      ctx.globalCompositeOperation = "destination-out";
-      brushAt(ctx, x, y, BRUSH);
-      ctx.globalCompositeOperation = "source-over";
+    const hasFrostAt = (x: number, y: number) => {
+      if (canvas.width < 2 || canvas.height < 2) return false;
+      const px = Math.min(canvas.width - 1, Math.max(0, Math.floor(x * dpr)));
+      const py = Math.min(canvas.height - 1, Math.max(0, Math.floor(y * dpr)));
+      return ctx.getImageData(px, py, 1, 1).data[3] > FROST_ALPHA;
     };
 
-    const markWiped = () => {
-      if (wiped) return;
-      wiped = true;
-      onWipedChangeRef.current(true);
+    const stamp = (x: number, y: number) => {
+      ctx.save();
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.globalAlpha = 1;
+      brushAt(ctx, x, y, BRUSH);
+      ctx.restore();
     };
 
     const onPointerDown = (event: PointerEvent) => {
-      pointerId = event.pointerId;
-      canvas.setPointerCapture(event.pointerId);
+      if (revealedRef.current || isFrostUiTarget(event.target)) return;
       const point = localPoint(event);
+      if (!hasFrostAt(point.x, point.y)) {
+        pointerId = event.pointerId;
+        startX = point.x;
+        startY = point.y;
+        lastX = point.x;
+        lastY = point.y;
+        moved = 0;
+        return;
+      }
+      pointerId = event.pointerId;
       startX = point.x;
       startY = point.y;
       lastX = point.x;
       lastY = point.y;
       moved = 0;
       stamp(point.x, point.y);
-      strokeCells += 1;
     };
 
     const onPointerMove = (event: PointerEvent) => {
@@ -131,22 +197,22 @@ export function FrostOverlay({ onTap, onWipedChange }: FrostOverlayProps) {
       const dy = point.y - lastY;
       const dist = Math.hypot(dx, dy);
       moved += dist;
-      if (dist > 4) {
-        const steps = Math.ceil(dist / 10);
+      if (dist > 3) {
+        const steps = Math.ceil(dist / 8);
         for (let i = 1; i <= steps; i += 1) {
           const t = i / steps;
           stamp(lastX + dx * t, lastY + dy * t);
         }
-        strokeCells += steps;
       }
       lastX = point.x;
       lastY = point.y;
-      if (moved > 28 || strokeCells > 8) markWiped();
+      if (moved > 20) markRevealed();
     };
 
     const onPointerUp = (event: PointerEvent) => {
       if (pointerId !== event.pointerId) return;
       pointerId = null;
+      if (revealedRef.current || isFrostUiTarget(event.target)) return;
       const point = localPoint(event);
       const travel = Math.hypot(point.x - startX, point.y - startY);
       if (travel < TAP_THRESHOLD && moved < TAP_THRESHOLD) {
@@ -154,23 +220,44 @@ export function FrostOverlay({ onTap, onWipedChange }: FrostOverlayProps) {
       }
     };
 
-    canvas.addEventListener("pointerdown", onPointerDown);
-    canvas.addEventListener("pointermove", onPointerMove);
-    canvas.addEventListener("pointerup", onPointerUp);
-    canvas.addEventListener("pointercancel", onPointerUp);
+    const onCleared = () => {
+      clearAll();
+    };
+
+    // Paint-only canvas: wipe from the document so chrome stays clickable
+    // even if a leftover boot canvas is stacked above the React tree.
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
+    document.addEventListener("pointercancel", onPointerUp);
+    window.addEventListener("frost-skip", onCleared);
+    window.addEventListener("frost:cleared", onCleared);
+
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    if (reduceMotion.matches) {
+      clearAll();
+    }
 
     return () => {
-      canvas.removeEventListener("pointerdown", onPointerDown);
-      canvas.removeEventListener("pointermove", onPointerMove);
-      canvas.removeEventListener("pointerup", onPointerUp);
-      canvas.removeEventListener("pointercancel", onPointerUp);
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", onPointerUp);
+      document.removeEventListener("pointercancel", onPointerUp);
+      window.removeEventListener("frost-skip", onCleared);
+      window.removeEventListener("frost:cleared", onCleared);
+      runtimeRef.current = null;
     };
   }, []);
 
+  useEffect(() => {
+    if (!revealed) return;
+    runtimeRef.current?.clearAll();
+  }, [revealed]);
+
   return (
-    <div
-      ref={hostRef}
-      className="absolute inset-0 z-30 overflow-hidden"
+    <canvas
+      ref={canvasRef}
+      className="pointer-events-none absolute inset-0 z-10 h-full w-full"
       aria-hidden
     />
   );

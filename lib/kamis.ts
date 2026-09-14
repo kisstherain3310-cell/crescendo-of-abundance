@@ -1,6 +1,6 @@
 import axios from "axios";
 import mockKamis from "@/data/mockKamis.json";
-import type { KamisDay, KamisSeries } from "@/lib/types";
+import type { DataSource, KamisDay, KamisSeries } from "@/lib/types";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -72,23 +72,32 @@ export function normalizeKamis(payload: unknown): KamisSeries {
     }
   }
 
-  return mockKamis as KamisSeries;
+  return withSourceMeta(mockKamis as KamisSeries, "demo");
+}
+
+function withSourceMeta(series: KamisSeries, source: DataSource): KamisSeries {
+  const last = series.series[series.series.length - 1];
+  return {
+    ...series,
+    source,
+    updatedAt: series.updatedAt ?? last?.date,
+  };
 }
 
 export async function fetchTomatoSeries(): Promise<KamisSeries> {
   const url = process.env.NEXT_PUBLIC_KAMIS_API_URL;
   if (!url) {
-    return mockKamis as KamisSeries;
+    return withSourceMeta(mockKamis as KamisSeries, "demo");
   }
 
   try {
     const { data } = await axios.get(url, { timeout: 4000 });
     const normalized = normalizeKamis(data);
     if (normalized.series.length === 0) {
-      return mockKamis as KamisSeries;
+      return withSourceMeta(mockKamis as KamisSeries, "demo");
     }
-    return normalized;
+    return withSourceMeta(normalized, "kamis");
   } catch {
-    return mockKamis as KamisSeries;
+    return withSourceMeta(mockKamis as KamisSeries, "demo");
   }
 }

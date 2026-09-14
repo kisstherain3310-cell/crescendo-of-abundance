@@ -59,9 +59,56 @@ body {
   inset: 0;
   width: 100%;
   height: 100%;
-  z-index: 30;
+  z-index: 10;
+  pointer-events: none;
   touch-action: none;
   display: block;
+}
+
+#frost-boot-ui {
+  position: fixed;
+  left: 50%;
+  bottom: max(1.5rem, env(safe-area-inset-bottom));
+  z-index: 80;
+  width: min(92vw, 22rem);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+#frost-boot-ui .frost-boot-card {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 1rem;
+  background: rgba(26, 10, 13, 0.82);
+  box-shadow: 0 12px 40px rgba(20, 0, 8, 0.45);
+  backdrop-filter: blur(12px);
+  padding: 0.85rem 1rem 1rem;
+  text-align: center;
+  color: #fff5f2;
+}
+
+#frost-boot-ui .frost-boot-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+#frost-boot-ui .frost-boot-sub {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  color: rgba(255, 245, 242, 0.75);
+}
+
+#frost-boot-skip {
+  pointer-events: auto;
+  margin-top: 0.75rem;
+  height: 2.5rem;
+  padding: 0 1.15rem;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff5f2;
+  font-size: 0.875rem;
+  cursor: pointer;
 }
 
 .sr-only {

@@ -54,6 +54,9 @@ export function mapSeriesToPhysics(series: KamisSeries): PhysicsConfig {
       item: series.item,
       unit: series.unit,
       priceUnit: series.priceUnit,
+      source: series.source ?? "demo",
+      updatedAt: series.updatedAt ?? fallbackDay.date,
+      market: series.market,
     };
   }
 
@@ -78,5 +81,8 @@ export function mapSeriesToPhysics(series: KamisSeries): PhysicsConfig {
     item: series.item,
     unit: series.unit,
     priceUnit: series.priceUnit,
+    source: series.source ?? "demo",
+    updatedAt: series.updatedAt ?? last.date,
+    market: series.market,
   };
 }

@@ -4,6 +4,8 @@ export type KamisDay = {
   price: number;
 };
 
+export type DataSource = "demo" | "kamis";
+
 export type KamisSeries = {
   item: string;
   itemCode?: string;
@@ -11,6 +13,8 @@ export type KamisSeries = {
   unit: string;
   priceUnit: string;
   series: KamisDay[];
+  source?: DataSource;
+  updatedAt?: string;
 };
 
 export type PhysicsConfig = {
@@ -22,6 +26,9 @@ export type PhysicsConfig = {
   item: string;
   unit: string;
   priceUnit: string;
+  source: DataSource;
+  updatedAt: string;
+  market?: string;
 };
 
 export type TomatoSwatch = {
