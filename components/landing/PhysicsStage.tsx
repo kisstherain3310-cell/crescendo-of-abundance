@@ -151,54 +151,56 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
 
     tapRef.current = onFruitTap;
 
-    useImperativeHandle(ref, () => ({
-      tapAt(clientX, clientY) {
-        const canvas = canvasRef.current;
-        const runtime = runtimeRef.current;
-        if (!canvas || !runtime) return;
-        const rect = canvas.getBoundingClientRect();
-        const x = clientX - rect.left;
-        const y = clientY - rect.top;
-        const hits = Matter.Query.point(runtime.tomatoes, { x, y });
-        let hit = hits[0] as TomatoBody | undefined;
-        if (!hit) {
-          let best = Number.POSITIVE_INFINITY;
-          for (const body of runtime.tomatoes) {
-            const radius = bodyRadius(body) + 14;
-            const dist = Math.hypot(body.position.x - x, body.position.y - y);
-            if (dist < radius && dist < best) {
-              best = dist;
-              hit = body;
-            }
+    const tapAtPoint = (clientX: number, clientY: number) => {
+      const canvas = canvasRef.current;
+      const runtime = runtimeRef.current;
+      if (!canvas || !runtime) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = clientX - rect.left;
+      const y = clientY - rect.top;
+      const hits = Matter.Query.point(runtime.tomatoes, { x, y });
+      let hit = hits[0] as TomatoBody | undefined;
+      if (!hit) {
+        let best = Number.POSITIVE_INFINITY;
+        for (const body of runtime.tomatoes) {
+          const radius = bodyRadius(body) + 14;
+          const dist = Math.hypot(body.position.x - x, body.position.y - y);
+          if (dist < radius && dist < best) {
+            best = dist;
+            hit = body;
           }
         }
-        if (!hit) return;
+      }
+      if (!hit) return;
 
-        const swatch = swatchAt(hit.swatchIndex);
-        for (let i = 0; i < 18; i += 1) {
-          const angle = (Math.PI * 2 * i) / 18 + Math.random() * 0.4;
-          const speed = 2.4 + Math.random() * 3.6;
-          runtime.particles.push({
-            x: hit.position.x,
-            y: hit.position.y,
-            vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed - 1.4,
-            life: 1,
-            maxLife: 1,
-            r: 2 + Math.random() * 3.2,
-            color: i % 3 === 0 ? swatch.spark : swatch.mid,
-          });
-        }
-        Matter.Body.applyForce(hit, hit.position, {
-          x: (Math.random() - 0.5) * 0.012,
-          y: -0.018,
-        });
-        tapRef.current({
-          seed: hit.id + hit.swatchIndex * 13,
+      const swatch = swatchAt(hit.swatchIndex);
+      for (let i = 0; i < 18; i += 1) {
+        const angle = (Math.PI * 2 * i) / 18 + Math.random() * 0.4;
+        const speed = 2.4 + Math.random() * 3.6;
+        runtime.particles.push({
           x: hit.position.x,
           y: hit.position.y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - 1.4,
+          life: 1,
+          maxLife: 1,
+          r: 2 + Math.random() * 3.2,
+          color: i % 3 === 0 ? swatch.spark : swatch.mid,
         });
-      },
+      }
+      Matter.Body.applyForce(hit, hit.position, {
+        x: (Math.random() - 0.5) * 0.012,
+        y: -0.018,
+      });
+      tapRef.current({
+        seed: hit.id + hit.swatchIndex * 13,
+        x: hit.position.x,
+        y: hit.position.y,
+      });
+    };
+
+    useImperativeHandle(ref, () => ({
+      tapAt: tapAtPoint,
     }));
 
     useEffect(() => {
@@ -376,9 +378,29 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
       observer.observe(host);
       window.addEventListener("resize", tryStart);
 
+      let pointerStartX = 0;
+      let pointerStartY = 0;
+      const onPointerDown = (event: PointerEvent) => {
+        pointerStartX = event.clientX;
+        pointerStartY = event.clientY;
+      };
+      const onPointerUp = (event: PointerEvent) => {
+        const travel = Math.hypot(
+          event.clientX - pointerStartX,
+          event.clientY - pointerStartY,
+        );
+        if (travel < 12) {
+          tapAtPoint(event.clientX, event.clientY);
+        }
+      };
+      canvas.addEventListener("pointerdown", onPointerDown);
+      canvas.addEventListener("pointerup", onPointerUp);
+
       return () => {
         window.cancelAnimationFrame(frame);
         window.removeEventListener("resize", tryStart);
+        canvas.removeEventListener("pointerdown", onPointerDown);
+        canvas.removeEventListener("pointerup", onPointerUp);
         observer.disconnect();
         Matter.World.clear(world, false);
         Matter.Engine.clear(engine);
@@ -388,7 +410,7 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
 
     return (
       <div ref={hostRef} className="absolute inset-0 z-0 bg-[#14080b]">
-        <canvas ref={canvasRef} className="block h-full w-full" />
+        <canvas ref={canvasRef} className="block h-full w-full cursor-pointer" />
       </div>
     );
   },
