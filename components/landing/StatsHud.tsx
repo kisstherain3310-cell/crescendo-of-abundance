@@ -1,7 +1,7 @@
 "use client";
 
 import type { PhysicsConfig } from "@/lib/types";
-import { formatKg, formatWon } from "@/lib/utils";
+import { formatKg, formatUpdatedClock, formatWon } from "@/lib/utils";
 
 type StatsHudProps = {
   physics: PhysicsConfig;
@@ -10,8 +10,8 @@ type StatsHudProps = {
 
 export function StatsHud({ physics, showPhysics = false }: StatsHudProps) {
   const crashing = physics.dropRatio >= 0.45;
-  const asOf = physics.updatedAt || physics.day.date;
-  const demo = physics.source !== "kamis";
+  const sourceLabel = physics.source === "kamis" ? "공개시세" : "데모 데이터";
+  const updatedClock = formatUpdatedClock(physics.updatedAt || physics.day.date);
 
   return (
     <aside
@@ -19,8 +19,8 @@ export function StatsHud({ physics, showPhysics = false }: StatsHudProps) {
       aria-label="출하 현황"
     >
       <p className="text-[0.68rem] font-medium tracking-wide text-rose-100/80">
-        {demo ? "데모 데이터" : "KAMIS"}
-        <span className="text-rose-100/50"> · {asOf} 기준</span>
+        {sourceLabel}
+        <span className="tabular-nums text-rose-100/70"> · 갱신 {updatedClock}</span>
       </p>
       <p className="mt-1 font-serif text-base leading-tight md:text-lg">
         {physics.item}

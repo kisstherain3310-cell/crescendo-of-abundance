@@ -21,6 +21,17 @@ export function formatWon(price: number) {
   return `${Math.round(price).toLocaleString("ko-KR")}원`;
 }
 
+/** ISO datetime or date → 24h `HH:MM` for HUD copy. No schema change. */
+export function formatUpdatedClock(iso: string) {
+  const fromIso = iso.match(/T(\d{2}):(\d{2})/);
+  if (fromIso) return `${fromIso[1]}:${fromIso[2]}`;
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return "00:00";
+  const hours = String(parsed.getUTCHours()).padStart(2, "0");
+  const minutes = String(parsed.getUTCMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
 export function median(values: number[]) {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
