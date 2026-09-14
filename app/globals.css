@@ -59,7 +59,7 @@ body {
   inset: 0;
   width: 100%;
   height: 100%;
-  z-index: 20;
+  z-index: 10;
   pointer-events: none;
   touch-action: none;
   display: block;
@@ -69,7 +69,7 @@ body {
   position: fixed;
   left: 50%;
   bottom: max(1.5rem, env(safe-area-inset-bottom));
-  z-index: 40;
+  z-index: 80;
   width: min(92vw, 22rem);
   transform: translateX(-50%);
   pointer-events: none;

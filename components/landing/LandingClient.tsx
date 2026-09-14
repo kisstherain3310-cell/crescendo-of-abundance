@@ -7,7 +7,7 @@ import { PhysicsStage, type PhysicsStageHandle } from "@/components/landing/Phys
 import { RecipeModal } from "@/components/landing/RecipeModal";
 import { StatsHud } from "@/components/landing/StatsHud";
 import { WipeHint } from "@/components/landing/WipeHint";
-import { isFrostSkipTarget } from "@/lib/frostUi";
+import { isFrostSkipKey } from "@/lib/frostUi";
 import { mapSeriesToPhysics } from "@/lib/mapDataToPhysics";
 import { recipeForSeed } from "@/lib/recipes";
 import type { KamisSeries, Recipe } from "@/lib/types";
@@ -19,15 +19,20 @@ type LandingClientProps = {
 export function LandingClient({ series }: LandingClientProps) {
   const physics = useMemo(() => mapSeriesToPhysics(series), [series]);
   const stageRef = useRef<PhysicsStageHandle>(null);
+  const recipeRef = useRef<Recipe | null>(null);
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [revealed, setRevealed] = useState(false);
   const [showPhysics, setShowPhysics] = useState(false);
-  const recipeRef = useRef<Recipe | null>(null);
+
   recipeRef.current = recipe;
 
   const openRecipe = useCallback((seed = Date.now()) => {
     const next = recipeForSeed(seed);
-    window.setTimeout(() => setRecipe(next), 0);
+    // Open after the current pointer/click gesture so a backdrop
+    // does not receive the same mouseup/click and immediately dismiss.
+    window.setTimeout(() => {
+      setRecipe(next);
+    }, 0);
   }, []);
 
   const skipFrost = useCallback(() => {
@@ -44,7 +49,7 @@ export function LandingClient({ series }: LandingClientProps) {
       setRevealed(true);
     }
 
-    const onSkipEvent = () => setRevealed(true);
+    const onCleared = () => setRevealed(true);
     const onKey = (event: KeyboardEvent) => {
       if (event.shiftKey && (event.key === "P" || event.key === "p")) {
         event.preventDefault();
@@ -52,30 +57,24 @@ export function LandingClient({ series }: LandingClientProps) {
         return;
       }
       if (recipeRef.current) return;
-      if (event.key === "Escape") {
-        event.preventDefault();
-        skipFrost();
-        return;
-      }
-      if (
-        isFrostSkipTarget(event.target) &&
-        (event.key === "Enter" || event.key === " " || event.code === "Space")
-      ) {
+      if (isFrostSkipKey(event)) {
         event.preventDefault();
         skipFrost();
       }
     };
 
-    window.addEventListener("frost-skip", onSkipEvent);
+    window.addEventListener("frost-skip", onCleared);
+    window.addEventListener("frost:cleared", onCleared);
     window.addEventListener("keydown", onKey);
     return () => {
-      window.removeEventListener("frost-skip", onSkipEvent);
+      window.removeEventListener("frost-skip", onCleared);
+      window.removeEventListener("frost:cleared", onCleared);
       window.removeEventListener("keydown", onKey);
     };
   }, [skipFrost]);
 
   return (
-    <div className="relative isolate h-[100dvh] min-h-[100svh] w-full overflow-hidden bg-[#14080b]">
+    <div className="relative h-[100dvh] min-h-[100svh] w-full overflow-hidden bg-[#14080b]">
       <PhysicsStage
         ref={stageRef}
         physics={physics}
@@ -84,7 +83,7 @@ export function LandingClient({ series }: LandingClientProps) {
       <FrostOverlay
         revealed={revealed}
         onTap={(x, y) => stageRef.current?.tapAt(x, y)}
-        onRevealed={() => setRevealed(true)}
+        onRevealed={skipFrost}
       />
       <Headline onOpenRecipe={() => openRecipe(3)} />
       <StatsHud physics={physics} showPhysics={showPhysics} />

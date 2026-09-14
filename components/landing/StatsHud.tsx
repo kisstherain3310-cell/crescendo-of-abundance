@@ -15,7 +15,7 @@ export function StatsHud({ physics, showPhysics = false }: StatsHudProps) {
 
   return (
     <aside
-      className="pointer-events-none absolute z-50 left-4 right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] top-auto w-auto rounded-2xl border border-white/15 bg-black/45 p-3 text-left text-rose-50 shadow-lg backdrop-blur-md md:left-auto md:right-4 md:top-4 md:bottom-auto md:w-[min(calc(100%-2rem),16.5rem)] md:p-4"
+      className="pointer-events-none fixed z-[80] left-4 right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] top-auto w-auto rounded-2xl border border-white/15 bg-black/45 p-3 text-left text-rose-50 shadow-lg backdrop-blur-md md:left-auto md:right-4 md:top-4 md:bottom-auto md:w-[min(calc(100%-2rem),16.5rem)] md:p-4"
       aria-label="출하 현황"
     >
       <p className="text-[0.68rem] font-medium tracking-wide text-rose-100/80">

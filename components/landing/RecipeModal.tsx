@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { Recipe } from "@/lib/types";
 
 type RecipeModalProps = {
@@ -9,8 +9,11 @@ type RecipeModalProps = {
 };
 
 export function RecipeModal({ recipe, onClose }: RecipeModalProps) {
+  const openedAtRef = useRef(0);
+
   useEffect(() => {
     if (!recipe) return;
+    openedAtRef.current = performance.now();
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -23,9 +26,14 @@ export function RecipeModal({ recipe, onClose }: RecipeModalProps) {
 
   if (!recipe) return null;
 
+  const closeUnlessOpeningGesture = () => {
+    if (performance.now() - openedAtRef.current < 450) return;
+    onClose();
+  };
+
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-end justify-center p-3 sm:items-center"
+      className="fixed inset-0 z-[90] flex items-end justify-center p-3 sm:items-center"
       role="dialog"
       aria-modal="true"
       aria-labelledby="recipe-title"
@@ -35,7 +43,12 @@ export function RecipeModal({ recipe, onClose }: RecipeModalProps) {
         type="button"
         className="absolute inset-0 bg-black/70 backdrop-blur-[2px]"
         aria-label="레시피 닫기"
-        onClick={onClose}
+        onClick={closeUnlessOpeningGesture}
+        onPointerDown={(event) => {
+          if (performance.now() - openedAtRef.current < 450) {
+            event.preventDefault();
+          }
+        }}
       />
       <div className="relative z-10 max-h-[min(88dvh,40rem)] w-[min(92vw,34rem)] overflow-auto rounded-2xl border border-rose-200/20 bg-[#2a1216] p-6 text-rose-50 shadow-lg">
         <button

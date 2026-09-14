@@ -3,6 +3,7 @@ export {};
 declare global {
   interface WindowEventMap {
     "frost-skip": Event;
+    "frost:cleared": CustomEvent<void>;
   }
 
   interface Window {

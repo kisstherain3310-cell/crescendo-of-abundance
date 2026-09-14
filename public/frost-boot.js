@@ -7,7 +7,7 @@
     if (!target || !target.closest) return false;
     return Boolean(
       target.closest(
-        "button, a, input, textarea, select, label, [data-frost-ui], [role='dialog']",
+        "button, a, input, textarea, select, label, [data-frost-ui], [data-frost-chrome], [role='dialog']",
       ),
     );
   }
@@ -79,22 +79,32 @@
     if (ui) ui.remove();
   }
 
+  function announceCleared() {
+    try {
+      window.dispatchEvent(new CustomEvent("frost-skip"));
+      window.dispatchEvent(new CustomEvent("frost:cleared"));
+    } catch (e) {}
+  }
+
   function skip() {
     var boot = window.__FROST_BOOT__;
-    if (!boot) return;
-    if (boot.canvas) {
-      var ctx = boot.canvas.getContext("2d");
+    var canvas =
+      (boot && boot.canvas) || document.getElementById("frost-boot-canvas");
+    if (canvas) {
+      var ctx = canvas.getContext("2d");
       if (ctx) {
         ctx.save();
         ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.clearRect(0, 0, boot.canvas.width, boot.canvas.height);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.restore();
       }
-      boot.canvas.style.pointerEvents = "none";
+      canvas.style.pointerEvents = "none";
     }
-    boot.cleared = true;
+    if (boot) {
+      boot.cleared = true;
+    }
     hideUi();
-    window.dispatchEvent(new CustomEvent("frost-skip"));
+    announceCleared();
   }
 
   function mountUi() {
@@ -106,7 +116,7 @@
       '<div class="frost-boot-card">' +
       '<p class="frost-boot-title">화면을 문질러 서리를 걷어내세요</p>' +
       '<p class="frost-boot-sub">Esc / Space 또는 건너뛰기로 바로 볼 수 있습니다</p>' +
-      '<button type="button" id="frost-boot-skip">서리 걷어내기</button>' +
+      '<button type="button" id="frost-boot-skip" data-frost-chrome>서리 걷어내기</button>' +
       "</div>";
     (document.body || document.documentElement).appendChild(ui);
     var button = document.getElementById("frost-boot-skip");
@@ -178,7 +188,7 @@
       canvas.id = "frost-boot-canvas";
       canvas.setAttribute("aria-hidden", "true");
       canvas.style.cssText =
-        "position:fixed;inset:0;width:100%;height:100%;z-index:20;pointer-events:none;touch-action:none;display:block;";
+        "position:fixed;inset:0;width:100%;height:100%;z-index:10;pointer-events:none;touch-action:none;display:block;";
       (document.body || document.documentElement).appendChild(canvas);
     }
     canvas.style.pointerEvents = "none";
@@ -194,15 +204,12 @@
 
     window.addEventListener("keydown", function (event) {
       if (window.__FROST_BOOT__ && window.__FROST_BOOT__.cleared) return;
-      var onSkip =
-        event.target &&
-        event.target.closest &&
-        event.target.closest("#frost-boot-skip, #frost-skip");
-      if (event.key === "Escape") {
-        skip();
-        return;
-      }
-      if (onSkip && (event.key === "Enter" || event.key === " ")) {
+      if (
+        event.key === "Escape" ||
+        event.key === "Enter" ||
+        event.key === " " ||
+        event.code === "Space"
+      ) {
         event.preventDefault();
         skip();
       }

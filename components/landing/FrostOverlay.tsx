@@ -173,7 +173,12 @@ export function FrostOverlay({
       if (revealedRef.current || isFrostUiTarget(event.target)) return;
       const point = localPoint(event);
       if (!hasFrostAt(point.x, point.y)) {
-        onTapRef.current(event.clientX, event.clientY);
+        pointerId = event.pointerId;
+        startX = point.x;
+        startY = point.y;
+        lastX = point.x;
+        lastY = point.y;
+        moved = 0;
         return;
       }
       pointerId = event.pointerId;
@@ -207,7 +212,7 @@ export function FrostOverlay({
     const onPointerUp = (event: PointerEvent) => {
       if (pointerId !== event.pointerId) return;
       pointerId = null;
-      if (isFrostUiTarget(event.target)) return;
+      if (revealedRef.current || isFrostUiTarget(event.target)) return;
       const point = localPoint(event);
       const travel = Math.hypot(point.x - startX, point.y - startY);
       if (travel < TAP_THRESHOLD && moved < TAP_THRESHOLD) {
@@ -215,12 +220,18 @@ export function FrostOverlay({
       }
     };
 
-    // Frost is paint-only. Wipe from the document so chrome (CTA/skip) stays clickable
-    // even if a leftover boot canvas is still stacked above the React tree.
+    const onCleared = () => {
+      clearAll();
+    };
+
+    // Paint-only canvas: wipe from the document so chrome stays clickable
+    // even if a leftover boot canvas is stacked above the React tree.
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("pointermove", onPointerMove);
     document.addEventListener("pointerup", onPointerUp);
     document.addEventListener("pointercancel", onPointerUp);
+    window.addEventListener("frost-skip", onCleared);
+    window.addEventListener("frost:cleared", onCleared);
 
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     if (reduceMotion.matches) {
@@ -232,6 +243,8 @@ export function FrostOverlay({
       document.removeEventListener("pointermove", onPointerMove);
       document.removeEventListener("pointerup", onPointerUp);
       document.removeEventListener("pointercancel", onPointerUp);
+      window.removeEventListener("frost-skip", onCleared);
+      window.removeEventListener("frost:cleared", onCleared);
       runtimeRef.current = null;
     };
   }, []);
@@ -244,7 +257,7 @@ export function FrostOverlay({
   return (
     <canvas
       ref={canvasRef}
-      className="pointer-events-none absolute inset-0 z-20 h-full w-full"
+      className="pointer-events-none absolute inset-0 z-10 h-full w-full"
       aria-hidden
     />
   );
