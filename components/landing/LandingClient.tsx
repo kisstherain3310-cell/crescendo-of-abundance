@@ -7,7 +7,7 @@ import { PhysicsStage, type PhysicsStageHandle } from "@/components/landing/Phys
 import { RecipeModal } from "@/components/landing/RecipeModal";
 import { StatsHud } from "@/components/landing/StatsHud";
 import { WipeHint } from "@/components/landing/WipeHint";
-import { isFrostSkipKey } from "@/lib/frostUi";
+import { isFrostSkipKey, isTypingTarget } from "@/lib/frostUi";
 import { mapSeriesToPhysics } from "@/lib/mapDataToPhysics";
 import { recipeForSeed } from "@/lib/recipes";
 import type { KamisSeries, Recipe } from "@/lib/types";
@@ -25,12 +25,15 @@ export function LandingClient({ series }: LandingClientProps) {
   const [showPhysics, setShowPhysics] = useState(false);
 
   recipeRef.current = recipe;
+  const revealedRef = useRef(revealed);
+  revealedRef.current = revealed;
 
   const openRecipe = useCallback((seed = Date.now()) => {
     setRecipe(recipeForSeed(seed));
   }, []);
 
   const skipFrost = useCallback(() => {
+    revealedRef.current = true;
     window.__FROST_BOOT__?.skip?.();
     setRevealed(true);
   }, []);
@@ -51,7 +54,10 @@ export function LandingClient({ series }: LandingClientProps) {
         setShowPhysics((value) => !value);
         return;
       }
-      if (recipeRef.current) return;
+      if (recipeRef.current || revealedRef.current || event.repeat) return;
+      if (isTypingTarget(event.target) || isTypingTarget(document.activeElement)) {
+        return;
+      }
       if (isFrostSkipKey(event)) {
         event.preventDefault();
         skipFrost();
@@ -60,11 +66,15 @@ export function LandingClient({ series }: LandingClientProps) {
 
     window.addEventListener("frost-skip", onCleared);
     window.addEventListener("frost:cleared", onCleared);
-    window.addEventListener("keydown", onKey);
+    // Capture so Enter/Space skip frost even when a chrome button (CTA, skip)
+    // is focused — QA failed when skip only ran on the skip button's keydown.
+    document.addEventListener("keydown", onKey, true);
+    window.addEventListener("keydown", onKey, true);
     return () => {
       window.removeEventListener("frost-skip", onCleared);
       window.removeEventListener("frost:cleared", onCleared);
-      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("keydown", onKey, true);
     };
   }, [skipFrost]);
 

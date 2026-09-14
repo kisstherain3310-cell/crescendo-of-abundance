@@ -27,6 +27,25 @@ export function isFrostSkipKey(event: KeyboardEvent) {
     event.key === "Escape" ||
     event.key === "Enter" ||
     event.key === " " ||
+    event.key === "Spacebar" ||
     event.code === "Space"
   );
+}
+
+export function isTypingTarget(target: EventTarget | null) {
+  const el =
+    target instanceof Element
+      ? target
+      : target instanceof Node
+        ? target.parentElement
+        : null;
+  if (!el) return false;
+  if (
+    el instanceof HTMLInputElement ||
+    el instanceof HTMLTextAreaElement ||
+    el instanceof HTMLSelectElement
+  ) {
+    return true;
+  }
+  return Boolean(el.closest("input, textarea, select, [contenteditable='true']"));
 }

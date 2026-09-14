@@ -115,7 +115,7 @@
     ui.innerHTML =
       '<div class="frost-boot-card">' +
       '<p class="frost-boot-title">화면을 문질러 서리를 걷어내세요</p>' +
-      '<p class="frost-boot-sub">Esc / Space 또는 건너뛰기로 바로 볼 수 있습니다</p>' +
+      '<p class="frost-boot-sub">Esc / Enter / Space 또는 건너뛰기로 바로 볼 수 있습니다</p>' +
       '<button type="button" id="frost-boot-skip" data-frost-chrome>서리 걷어내기</button>' +
       "</div>";
     (document.body || document.documentElement).appendChild(ui);
@@ -202,18 +202,31 @@
       skip: skip,
     };
 
-    window.addEventListener("keydown", function (event) {
+    function isTyping(node) {
+      var el = node && node.nodeType === 3 ? node.parentElement : node;
+      if (!el || !el.closest) return false;
+      return Boolean(el.closest("input, textarea, select, [contenteditable='true']"));
+    }
+
+    function onSkipKey(event) {
       if (window.__FROST_BOOT__ && window.__FROST_BOOT__.cleared) return;
+      if (isTyping(event.target) || isTyping(document.activeElement)) return;
       if (
         event.key === "Escape" ||
         event.key === "Enter" ||
         event.key === " " ||
+        event.key === "Spacebar" ||
         event.code === "Space"
       ) {
         event.preventDefault();
         skip();
       }
-    });
+    }
+
+    // Capture on both document and window so Enter/Space clear frost
+    // even when a chrome button is focused (skip is not required).
+    document.addEventListener("keydown", onSkipKey, true);
+    window.addEventListener("keydown", onSkipKey, true);
   }
 
   if (document.body) mount();

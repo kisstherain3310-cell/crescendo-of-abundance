@@ -41,6 +41,10 @@ export function WipeHint({ hidden, onSkip }: WipeHintProps) {
               </kbd>
               {" / "}
               <kbd className="rounded border border-white/20 px-1 py-0.5 text-[0.65rem]">
+                Enter
+              </kbd>
+              {" / "}
+              <kbd className="rounded border border-white/20 px-1 py-0.5 text-[0.65rem]">
                 Space
               </kbd>
               {" "}또는 아래 버튼으로 건너뛸 수 있습니다.
