@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import type { Recipe } from "@/lib/types";
 
 type RecipeModalProps = {
@@ -8,45 +9,53 @@ type RecipeModalProps = {
   onClose: () => void;
 };
 
+const DISMISS_GUARD_MS = 700;
+
 export function RecipeModal({ recipe, onClose }: RecipeModalProps) {
-  const [backdropLive, setBackdropLive] = useState(false);
+  const openedAtRef = useRef(0);
+  const onCloseRef = useRef(onClose);
 
   useEffect(() => {
-    if (!recipe) {
-      setBackdropLive(false);
-      return;
-    }
-    setBackdropLive(false);
-    const arm = window.setTimeout(() => setBackdropLive(true), 500);
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!recipe) return;
+    openedAtRef.current = performance.now();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-      }
+      if (event.key !== "Escape") return;
+      if (performance.now() - openedAtRef.current < DISMISS_GUARD_MS) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onCloseRef.current();
     };
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.clearTimeout(arm);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [recipe, onClose]);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [recipe]);
 
-  if (!recipe) return null;
+  if (!recipe || typeof document === "undefined") return null;
 
-  return (
+  const ignoreDismiss = () => performance.now() - openedAtRef.current < DISMISS_GUARD_MS;
+
+  const closeIfArmed = () => {
+    if (ignoreDismiss()) return;
+    onClose();
+  };
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-[90] flex items-end justify-center p-3 sm:items-center"
+      className="fixed inset-0 z-[200] flex items-end justify-center p-3 sm:items-center"
       role="dialog"
       aria-modal="true"
       aria-labelledby="recipe-title"
       data-recipe-modal="1"
       data-frost-ui
+      onPointerDown={(event) => event.stopPropagation()}
     >
       <div
-        className={`absolute inset-0 bg-black/70 backdrop-blur-[2px] ${
-          backdropLive ? "pointer-events-auto" : "pointer-events-none"
-        }`}
-        onClick={backdropLive ? onClose : undefined}
+        className="absolute inset-0 bg-black/70 backdrop-blur-[2px]"
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={closeIfArmed}
         aria-hidden
       />
       <div className="relative z-10 max-h-[min(88dvh,40rem)] w-[min(92vw,34rem)] overflow-auto rounded-2xl border border-rose-200/20 bg-[#2a1216] p-6 text-rose-50 shadow-lg">
@@ -91,6 +100,7 @@ export function RecipeModal({ recipe, onClose }: RecipeModalProps) {
           </section>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

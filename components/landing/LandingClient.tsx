@@ -23,29 +23,39 @@ export function LandingClient({ series }: LandingClientProps) {
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [revealed, setRevealed] = useState(false);
   const [showPhysics, setShowPhysics] = useState(false);
-
-  recipeRef.current = recipe;
   const revealedRef = useRef(revealed);
-  revealedRef.current = revealed;
+
+  useEffect(() => {
+    revealedRef.current = revealed;
+  }, [revealed]);
 
   const openRecipe = useCallback((seed = Date.now()) => {
-    setRecipe(recipeForSeed(seed));
+    const next = recipeForSeed(seed);
+    recipeRef.current = next;
+    setRecipe(next);
+  }, []);
+
+  const closeRecipe = useCallback(() => {
+    recipeRef.current = null;
+    setRecipe(null);
   }, []);
 
   const skipFrost = useCallback(() => {
     revealedRef.current = true;
     window.__FROST_BOOT__?.skip?.();
+    document.getElementById("frost-boot-canvas")?.remove();
+    document.getElementById("frost-boot-ui")?.remove();
     setRevealed(true);
   }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("dev") === "1" || params.get("physics") === "1") {
-      setShowPhysics(true);
-    }
-    if (window.__FROST_BOOT__?.cleared) {
-      setRevealed(true);
-    }
+    const physicsOn = params.get("dev") === "1" || params.get("physics") === "1";
+    const frostCleared = Boolean(window.__FROST_BOOT__?.cleared);
+    const boot = window.setTimeout(() => {
+      if (physicsOn) setShowPhysics(true);
+      if (frostCleared) setRevealed(true);
+    }, 0);
 
     const onCleared = () => setRevealed(true);
     const onKey = (event: KeyboardEvent) => {
@@ -54,7 +64,7 @@ export function LandingClient({ series }: LandingClientProps) {
         setShowPhysics((value) => !value);
         return;
       }
-      if (recipeRef.current || revealedRef.current || event.repeat) return;
+      if (revealedRef.current || event.repeat) return;
       if (isTypingTarget(event.target) || isTypingTarget(document.activeElement)) {
         return;
       }
@@ -71,6 +81,7 @@ export function LandingClient({ series }: LandingClientProps) {
     document.addEventListener("keydown", onKey, true);
     window.addEventListener("keydown", onKey, true);
     return () => {
+      window.clearTimeout(boot);
       window.removeEventListener("frost-skip", onCleared);
       window.removeEventListener("frost:cleared", onCleared);
       document.removeEventListener("keydown", onKey, true);
@@ -93,7 +104,7 @@ export function LandingClient({ series }: LandingClientProps) {
       <Headline onOpenRecipe={() => openRecipe(3)} />
       <StatsHud physics={physics} showPhysics={showPhysics} />
       <WipeHint hidden={revealed} onSkip={skipFrost} />
-      <RecipeModal recipe={recipe} onClose={() => setRecipe(null)} />
+      <RecipeModal recipe={recipe} onClose={closeRecipe} />
     </div>
   );
 }

@@ -12,14 +12,22 @@ const FROST_UI_SELECTOR = [
   "[role='alertdialog']",
 ].join(",");
 
+function asElement(target: EventTarget | null): Element | null {
+  if (target instanceof Element) return target;
+  if (target instanceof Node) return target.parentElement;
+  return null;
+}
+
 export function isFrostUiTarget(target: EventTarget | null) {
-  if (!(target instanceof Element)) return false;
-  return Boolean(target.closest(FROST_UI_SELECTOR));
+  const el = asElement(target);
+  if (!el) return false;
+  return Boolean(el.closest(FROST_UI_SELECTOR));
 }
 
 export function isFrostSkipTarget(target: EventTarget | null) {
-  if (!(target instanceof Element)) return false;
-  return Boolean(target.closest("#frost-skip, #frost-boot-skip"));
+  const el = asElement(target);
+  if (!el) return false;
+  return Boolean(el.closest("#frost-skip, #frost-boot-skip"));
 }
 
 export function isFrostSkipKey(event: KeyboardEvent) {

@@ -4,9 +4,10 @@
   var BRUSH = 56;
 
   function isChrome(target) {
-    if (!target || !target.closest) return false;
+    var el = target && target.nodeType === 3 ? target.parentElement : target;
+    if (!el || !el.closest) return false;
     return Boolean(
-      target.closest(
+      el.closest(
         "button, a, input, textarea, select, label, [data-frost-ui], [data-frost-chrome], [role='dialog']",
       ),
     );
@@ -102,6 +103,10 @@
     }
     if (boot) {
       boot.cleared = true;
+      boot.canvas = undefined;
+    }
+    if (canvas && canvas.parentNode) {
+      canvas.parentNode.removeChild(canvas);
     }
     hideUi();
     announceCleared();

@@ -67,6 +67,7 @@ function brushAt(
 function teardownBootLayer() {
   const boot = window.__FROST_BOOT__;
   boot?.canvas?.remove();
+  document.getElementById("frost-boot-canvas")?.remove();
   document.getElementById("frost-boot-ui")?.remove();
   if (boot) {
     boot.canvas = undefined;
@@ -84,9 +85,11 @@ export function FrostOverlay({
   const revealedRef = useRef(revealed);
   const runtimeRef = useRef<{ clearAll: () => void } | null>(null);
 
-  onTapRef.current = onTap;
-  onRevealedRef.current = onRevealed;
-  revealedRef.current = revealed;
+  useEffect(() => {
+    onTapRef.current = onTap;
+    onRevealedRef.current = onRevealed;
+    revealedRef.current = revealed;
+  });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -127,6 +130,10 @@ export function FrostOverlay({
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.restore();
       canvas.style.pointerEvents = "none";
+      canvas.style.opacity = "0";
+      canvas.style.visibility = "hidden";
+      canvas.style.zIndex = "-1";
+      teardownBootLayer();
       markRevealed();
     };
 
@@ -257,7 +264,10 @@ export function FrostOverlay({
   return (
     <canvas
       ref={canvasRef}
-      className="pointer-events-none absolute inset-0 z-10 h-full w-full"
+      className={`pointer-events-none absolute inset-0 h-full w-full ${
+        revealed ? "invisible z-0 opacity-0" : "z-10"
+      }`}
+      style={revealed ? { display: "none" } : undefined}
       aria-hidden
     />
   );

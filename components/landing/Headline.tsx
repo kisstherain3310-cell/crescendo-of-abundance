@@ -9,7 +9,7 @@ export function Headline({ onOpenRecipe }: HeadlineProps) {
     <header
       data-frost-chrome
       data-frost-ui
-      className="pointer-events-none fixed inset-x-0 top-0 z-[80] flex flex-col items-center px-4 pt-[max(1rem,env(safe-area-inset-top))] text-center sm:px-6 sm:pt-[min(10vh,6.5rem)]"
+      className="pointer-events-none fixed inset-x-0 top-0 z-[90] flex flex-col items-center px-4 pt-[max(1rem,env(safe-area-inset-top))] text-center sm:px-6 sm:pt-[min(10vh,6.5rem)]"
     >
       <p className="font-sans text-[0.68rem] font-medium uppercase tracking-[0.42em] text-rose-100/80">
         Crescendo of Abundance
@@ -20,18 +20,22 @@ export function Headline({ onOpenRecipe }: HeadlineProps) {
           가장 완벽한 과잉을 소비할 시간.
         </span>
       </h1>
-      <div className="pointer-events-auto relative z-[80] mt-5 sm:mt-8" data-frost-ui>
+      <div className="pointer-events-auto relative z-[90] mt-5 sm:mt-8" data-frost-ui>
         <button
           id="open-recipe-cta"
           type="button"
           data-frost-chrome
-          onPointerDown={(event) => event.stopPropagation()}
+          data-frost-ui
+          onPointerDown={(event) => {
+            event.stopPropagation();
+            onOpenRecipe();
+          }}
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
             onOpenRecipe();
           }}
-          className="relative z-[80] inline-flex h-11 items-center justify-center rounded-full bg-primary px-6 text-[0.95rem] font-semibold text-primary-foreground shadow-[0_10px_40px_rgba(80,0,20,0.35)] hover:bg-primary/90"
+          className="relative z-[90] inline-flex h-11 items-center justify-center rounded-full bg-primary px-6 text-[0.95rem] font-semibold text-primary-foreground shadow-[0_10px_40px_rgba(80,0,20,0.35)] hover:bg-primary/90"
         >
           과잉 레시피 보기
         </button>

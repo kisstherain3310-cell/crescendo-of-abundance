@@ -21,19 +21,23 @@ type MatterLib = {
 };
 
 function resolveMatter(): MatterLib | null {
-  const root = MatterNS as unknown as { default?: unknown } & Record<string, unknown>;
-  const candidates = [root, root.default];
-  for (const candidate of candidates) {
-    if (!candidate || typeof candidate !== "object") continue;
-    const pack = candidate as Partial<MatterLib>;
-    if (
-      typeof pack.Engine?.create === "function" &&
-      typeof pack.Bodies?.circle === "function" &&
-      typeof pack.Composite?.add === "function" &&
-      typeof pack.Body?.setVelocity === "function"
-    ) {
-      return pack as MatterLib;
+  try {
+    const root = MatterNS as unknown as { default?: unknown } & Record<string, unknown>;
+    const candidates = [root, root.default];
+    for (const candidate of candidates) {
+      if (!candidate || typeof candidate !== "object") continue;
+      const pack = candidate as Partial<MatterLib>;
+      if (
+        typeof pack.Engine?.create === "function" &&
+        typeof pack.Bodies?.circle === "function" &&
+        typeof pack.Composite?.add === "function" &&
+        typeof pack.Body?.setVelocity === "function"
+      ) {
+        return pack as MatterLib;
+      }
     }
+  } catch {
+    return null;
   }
   return null;
 }
@@ -70,6 +74,7 @@ type TomatoSprite = {
 };
 
 const WALL = 80;
+const MIN_TOMATOES = 18;
 
 function measureStage(host: HTMLElement) {
   const rect = host.getBoundingClientRect();
@@ -77,6 +82,17 @@ function measureStage(host: HTMLElement) {
     cssWidth: Math.max(rect.width || 0, window.innerWidth || 0, 390),
     cssHeight: Math.max(rect.height || 0, window.innerHeight || 0, 640),
   };
+}
+
+function onStage(x: number, y: number, width: number, height: number, pad = 48) {
+  return (
+    Number.isFinite(x) &&
+    Number.isFinite(y) &&
+    x >= -pad &&
+    y >= -pad &&
+    x <= width + pad &&
+    y <= height + pad
+  );
 }
 
 function drawTomato(
@@ -187,7 +203,9 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
       cssHeight: number;
     }>({ tomatoes: [], particles: [], cssWidth: 390, cssHeight: 640 });
 
-    tapRef.current = onFruitTap;
+    useLayoutEffect(() => {
+      tapRef.current = onFruitTap;
+    }, [onFruitTap]);
 
     const tapAtPoint = (clientX: number, clientY: number) => {
       const canvas = canvasRef.current;
@@ -242,9 +260,7 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      const Matter = resolveMatter();
-      let engine: MatterNS.Engine | null = null;
-      let world: MatterNS.World | null = null;
+      let cancelled = false;
       const tomatoes: TomatoSprite[] = [];
       const particles: Particle[] = [];
       const walls: MatterNS.Body[] = [];
@@ -252,6 +268,10 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
       let lastWidth = 0;
       let lastHeight = 0;
       let nudge = 0;
+      let matterLive = false;
+      let engine: MatterNS.Engine | null = null;
+      let world: MatterNS.World | null = null;
+      let Matter: MatterLib | null = null;
 
       runtimeRef.current = {
         tomatoes,
@@ -260,62 +280,76 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
         cssHeight: 640,
       };
 
-      const count = Math.max(physics.bodyCount || 0, 18);
+      const count = Math.max(physics.bodyCount || 0, MIN_TOMATOES);
 
-      const spawnSprites = (width: number, height: number) => {
-        if (Matter && world) {
-          tomatoes.forEach((tomato) => {
-            if (tomato.body) Matter.Composite.remove(world as MatterNS.World, tomato.body);
-          });
-        }
-        tomatoes.length = 0;
-        for (let i = 0; i < count; i += 1) {
-          const r = 18 + (i % 5) * 2.4;
-          const x = r + 16 + Math.random() * Math.max(width - r * 2 - 32, 40);
-          const y = 80 + Math.random() * Math.max(height - 180, 160);
-          const sprite: TomatoSprite = {
-            x,
-            y,
-            vx: (Math.random() - 0.5) * 4.5,
-            vy: -2 - Math.random() * 5,
-            r,
-            angle: Math.random() * Math.PI,
-            spin: (Math.random() - 0.5) * 0.18,
-            swatchIndex: i,
-            body: null,
-          };
-          if (Matter && world) {
-            const body = Matter.Bodies.circle(x, y, r, {
-              restitution: physics.restitution,
-              friction: 0.1,
-              frictionAir: 0.045,
-              density: 0.0015,
-              label: "tomato",
-            });
-            Matter.Body.setAngularVelocity(body, sprite.spin);
-            Matter.Body.setVelocity(body, { x: sprite.vx, y: sprite.vy });
-            sprite.body = body;
-            Matter.Composite.add(world, body);
-          }
-          tomatoes.push(sprite);
-        }
-        runtimeRef.current.tomatoes = tomatoes;
-        setTomatoCount(tomatoes.length);
-        canvas.dataset.tomatoCount = String(tomatoes.length);
-        canvas.dataset.physicsReady = tomatoes.length > 0 ? "1" : "0";
+      const syncCount = () => {
+        const n = tomatoes.length;
+        canvas.dataset.tomatoCount = String(n);
+        canvas.dataset.physicsReady = n > 0 ? "1" : "0";
+        host.dataset.tomatoCount = String(n);
+        setTomatoCount(n);
       };
 
-      const layoutWalls = (width: number, height: number) => {
-        if (!Matter || !world) return;
-        walls.forEach((wall) => Matter.Composite.remove(world as MatterNS.World, wall));
-        walls.length = 0;
-        const options = { isStatic: true, restitution: 0.16, friction: 0.35 };
-        walls.push(
-          Matter.Bodies.rectangle(width / 2, height + WALL / 2 - 4, width + WALL * 2, WALL, options),
-          Matter.Bodies.rectangle(-WALL / 2, height / 2, WALL, height + WALL * 2, options),
-          Matter.Bodies.rectangle(width + WALL / 2, height / 2, WALL, height + WALL * 2, options),
-        );
-        Matter.Composite.add(world, walls);
+      const clampTomato = (tomato: TomatoSprite, width: number, height: number) => {
+        const minX = tomato.r;
+        const maxX = Math.max(tomato.r, width - tomato.r);
+        const minY = tomato.r;
+        const maxY = Math.max(tomato.r, height - tomato.r);
+        if (!Number.isFinite(tomato.x) || !Number.isFinite(tomato.y)) {
+          tomato.x = width * 0.5;
+          tomato.y = height * 0.35;
+          tomato.vx = (Math.random() - 0.5) * 3;
+          tomato.vy = -2;
+        }
+        if (tomato.x < minX) {
+          tomato.x = minX;
+          tomato.vx = Math.abs(tomato.vx) * 0.7;
+        } else if (tomato.x > maxX) {
+          tomato.x = maxX;
+          tomato.vx = -Math.abs(tomato.vx) * 0.7;
+        }
+        if (tomato.y > maxY) {
+          tomato.y = maxY;
+          tomato.vy = -Math.abs(tomato.vy) * 0.45;
+          tomato.vx *= 0.98;
+        } else if (tomato.y < minY) {
+          tomato.y = minY;
+          tomato.vy = Math.abs(tomato.vy);
+        }
+      };
+
+      const spawnSprites = (width: number, height: number) => {
+        tomatoes.length = 0;
+        const cols = Math.max(3, Math.ceil(Math.sqrt(count * (width / Math.max(height, 1)))));
+        const rows = Math.max(3, Math.ceil(count / cols));
+        const cellW = width / cols;
+        const cellH = Math.max(36, (height - 96) / rows);
+        for (let i = 0; i < count; i += 1) {
+          const r = 16 + (i % 5) * 2.4;
+          const col = i % cols;
+          const row = Math.floor(i / cols);
+          const x = Math.min(
+            width - r - 8,
+            Math.max(r + 8, cellW * (col + 0.5) + (Math.random() - 0.5) * cellW * 0.28),
+          );
+          const y = Math.min(
+            height - r - 12,
+            Math.max(r + 24, 72 + cellH * row + (Math.random() - 0.5) * 18),
+          );
+          tomatoes.push({
+            x,
+            y,
+            vx: (Math.random() - 0.5) * 3.2,
+            vy: -1.2 - Math.random() * 3.5,
+            r,
+            angle: Math.random() * Math.PI,
+            spin: (Math.random() - 0.5) * 0.14,
+            swatchIndex: i,
+            body: null,
+          });
+        }
+        runtimeRef.current.tomatoes = tomatoes;
+        syncCount();
       };
 
       const fit = () => {
@@ -328,20 +362,7 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         runtimeRef.current.cssWidth = cssWidth;
         runtimeRef.current.cssHeight = cssHeight;
-        const sizeChanged =
-          Math.abs(cssWidth - lastWidth) > 1 || Math.abs(cssHeight - lastHeight) > 1;
-        if (sizeChanged || (Matter && walls.length === 0)) {
-          lastWidth = cssWidth;
-          lastHeight = cssHeight;
-          layoutWalls(cssWidth, cssHeight);
-          tomatoes.forEach((tomato) => {
-            tomato.x = Math.min(cssWidth - tomato.r, Math.max(tomato.r, tomato.x));
-            tomato.y = Math.min(cssHeight - tomato.r, Math.max(tomato.r, tomato.y));
-            if (Matter && tomato.body) {
-              Matter.Body.setPosition(tomato.body, { x: tomato.x, y: tomato.y });
-            }
-          });
-        }
+        tomatoes.forEach((tomato) => clampTomato(tomato, cssWidth, cssHeight));
         return { cssWidth, cssHeight };
       };
 
@@ -369,6 +390,8 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
           ctx.fill();
           ctx.globalAlpha = 1;
         }
+        canvas.dataset.tomatoCount = String(tomatoes.length);
+        canvas.dataset.physicsReady = tomatoes.length > 0 ? "1" : "0";
       };
 
       const stepKinematic = (width: number, height: number) => {
@@ -377,47 +400,107 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
           tomato.x += tomato.vx;
           tomato.y += tomato.vy;
           tomato.angle += tomato.spin;
-          if (tomato.x < tomato.r) {
-            tomato.x = tomato.r;
-            tomato.vx = Math.abs(tomato.vx) * 0.7;
-          } else if (tomato.x > width - tomato.r) {
-            tomato.x = width - tomato.r;
-            tomato.vx = -Math.abs(tomato.vx) * 0.7;
+          clampTomato(tomato, width, height);
+        });
+      };
+
+      const layoutWalls = (width: number, height: number) => {
+        const lib = Matter;
+        const matterWorld = world;
+        if (!lib || !matterWorld) return;
+        walls.forEach((wall) => {
+          try {
+            lib.Composite.remove(matterWorld, wall);
+          } catch {
+            /* ignore */
           }
-          if (tomato.y > height - tomato.r) {
-            tomato.y = height - tomato.r;
-            tomato.vy = -Math.abs(tomato.vy) * 0.45;
-            tomato.vx *= 0.98;
-          } else if (tomato.y < tomato.r) {
-            tomato.y = tomato.r;
-            tomato.vy = Math.abs(tomato.vy);
+        });
+        walls.length = 0;
+        const options = { isStatic: true, restitution: 0.16, friction: 0.35 };
+        walls.push(
+          lib.Bodies.rectangle(width / 2, height + WALL / 2 - 4, width + WALL * 2, WALL, options),
+          lib.Bodies.rectangle(-WALL / 2, height / 2, WALL, height + WALL * 2, options),
+          lib.Bodies.rectangle(width + WALL / 2, height / 2, WALL, height + WALL * 2, options),
+        );
+        lib.Composite.add(matterWorld, walls);
+      };
+
+      const attachBodies = (width: number, height: number) => {
+        const lib = Matter;
+        const matterWorld = world;
+        if (!lib || !matterWorld) return;
+        layoutWalls(width, height);
+        tomatoes.forEach((tomato) => {
+          try {
+            const body = lib.Bodies.circle(tomato.x, tomato.y, tomato.r, {
+              restitution: Math.min(physics.restitution, 0.42),
+              friction: 0.16,
+              frictionAir: 0.06,
+              density: 0.0015,
+              label: "tomato",
+            });
+            lib.Body.setAngularVelocity(body, tomato.spin);
+            lib.Body.setVelocity(body, { x: tomato.vx, y: tomato.vy });
+            tomato.body = body;
+            lib.Composite.add(matterWorld, body);
+          } catch {
+            tomato.body = null;
           }
         });
       };
 
+      const disableMatter = () => {
+        matterLive = false;
+        tomatoes.forEach((tomato) => {
+          tomato.body = null;
+        });
+      };
+
       const tick = () => {
+        if (cancelled) return;
         frame = window.requestAnimationFrame(tick);
         const width = runtimeRef.current.cssWidth;
         const height = runtimeRef.current.cssHeight;
-        if (Matter && engine) {
-          Matter.Engine.update(engine, 1000 / 60);
-          nudge += 1;
-          tomatoes.forEach((tomato) => {
-            if (!tomato.body) return;
-            tomato.x = tomato.body.position.x;
-            tomato.y = tomato.body.position.y;
-            tomato.angle = tomato.body.angle;
-          });
-          if (tomatoes.length > 0 && nudge % 6 === 0) {
-            for (let k = 0; k < 5; k += 1) {
-              const tomato = tomatoes[(nudge + k * 19) % tomatoes.length];
-              if (tomato.body) {
-                Matter.Body.setVelocity(tomato.body, {
-                  x: (Math.random() - 0.5) * 6,
-                  y: -3.2 - Math.random() * 6,
-                });
+        if (tomatoes.length < MIN_TOMATOES) {
+          spawnSprites(width, height);
+        }
+        if (matterLive && Matter && engine) {
+          try {
+            Matter.Engine.update(engine, 1000 / 60);
+            let escaped = 0;
+            tomatoes.forEach((tomato) => {
+              if (!tomato.body) return;
+              const x = tomato.body.position.x;
+              const y = tomato.body.position.y;
+              if (!onStage(x, y, width, height)) {
+                escaped += 1;
+                return;
+              }
+              tomato.x = x;
+              tomato.y = y;
+              tomato.angle = tomato.body.angle;
+              clampTomato(tomato, width, height);
+            });
+            if (escaped > 8) {
+              disableMatter();
+              stepKinematic(width, height);
+            } else {
+              nudge += 1;
+              if (tomatoes.length > 0 && nudge % 8 === 0) {
+                for (let k = 0; k < 4; k += 1) {
+                  const tomato = tomatoes[(nudge + k * 19) % tomatoes.length];
+                  if (tomato.body && Matter) {
+                    Matter.Body.setVelocity(tomato.body, {
+                      x: (Math.random() - 0.5) * 4.5,
+                      y: -2.4 - Math.random() * 4.5,
+                    });
+                  }
+                }
               }
             }
+          } catch {
+            disableMatter();
+            stepKinematic(width, height);
           }
         } else {
           stepKinematic(width, height);
@@ -431,31 +514,57 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
         paint();
       };
 
-      try {
-        if (Matter) {
-          engine = Matter.Engine.create({ enableSleeping: false });
-          engine.gravity.x = 0;
-          engine.gravity.y = Math.min(physics.gravity, 0.12);
-          engine.gravity.scale = 0.001;
-          world = engine.world;
-        }
-      } catch {
-        engine = null;
-        world = null;
-      }
-
       const { cssWidth, cssHeight } = fit();
       spawnSprites(cssWidth, cssHeight);
       paint();
+
+      try {
+        Matter = resolveMatter();
+        if (Matter) {
+          engine = Matter.Engine.create({ enableSleeping: false });
+          engine.gravity.x = 0;
+          engine.gravity.y = Math.min(physics.gravity, 0.08);
+          engine.gravity.scale = 0.001;
+          world = engine.world;
+          attachBodies(cssWidth, cssHeight);
+          matterLive = tomatoes.some((tomato) => tomato.body);
+        }
+      } catch {
+        disableMatter();
+        engine = null;
+        world = null;
+        Matter = null;
+      }
+
       tick();
 
-      const observer = new ResizeObserver(() => {
-        const before = tomatoes.length;
-        fit();
-        if (before === 0) spawnSprites(runtimeRef.current.cssWidth, runtimeRef.current.cssHeight);
-      });
+      const onResize = () => {
+        if (cancelled) return;
+        const { cssWidth: nextW, cssHeight: nextH } = fit();
+        const sizeChanged =
+          Math.abs(nextW - lastWidth) > 1 || Math.abs(nextH - lastHeight) > 1;
+        lastWidth = nextW;
+        lastHeight = nextH;
+        if (sizeChanged && matterLive) {
+          try {
+            layoutWalls(nextW, nextH);
+            tomatoes.forEach((tomato) => {
+              if (Matter && tomato.body) {
+                Matter.Body.setPosition(tomato.body, { x: tomato.x, y: tomato.y });
+              }
+            });
+          } catch {
+            disableMatter();
+          }
+        }
+        if (tomatoes.length < MIN_TOMATOES) spawnSprites(nextW, nextH);
+        paint();
+      };
+      lastWidth = cssWidth;
+      lastHeight = cssHeight;
+      const observer = new ResizeObserver(onResize);
       observer.observe(host);
-      window.addEventListener("resize", fit);
+      window.addEventListener("resize", onResize);
 
       let pointerStartX = 0;
       let pointerStartY = 0;
@@ -483,15 +592,20 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
       canvas.addEventListener("click", onClick);
 
       return () => {
+        cancelled = true;
         window.cancelAnimationFrame(frame);
-        window.removeEventListener("resize", fit);
+        window.removeEventListener("resize", onResize);
         canvas.removeEventListener("pointerdown", onPointerDown);
         canvas.removeEventListener("pointerup", onPointerUp);
         canvas.removeEventListener("click", onClick);
         observer.disconnect();
-        if (Matter && world && engine) {
-          Matter.World.clear(world, false);
-          Matter.Engine.clear(engine);
+        try {
+          if (Matter && world && engine) {
+            Matter.World.clear(world, false);
+            Matter.Engine.clear(engine);
+          }
+        } catch {
+          /* ignore */
         }
       };
     }, [physics.bodyCount, physics.dropRatio, physics.gravity, physics.restitution]);
