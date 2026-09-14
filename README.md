@@ -13,14 +13,19 @@ npm install
 npm run dev
 ```
 
-브라우저에서 [http://localhost:43173](http://localhost:43173) 을 엽니다.
+**공식 검증 URL은 [http://localhost:43173](http://localhost:43173) 입니다.** QA·리뷰는 이 호스트를 기준으로 통과를 판단하세요.
+
+`http://127.0.0.1:43173` 도 같은 서버에 붙습니다. Next.js 16은 개발 모드에서 `localhost`와 `127.0.0.1`을 서로 다른 오리진으로 보고, 허용되지 않은 호스트의 `/_next` 청크·HMR을 403으로 막습니다. 그때 SSR HTML(HUD 과실 수)만 남고 토마토 캔버스·레시피 모달이 죽습니다. `next.config.ts`의 `allowedDevOrigins`가 `127.0.0.1`을 허용하고, `npm run dev` / `npm start` 는 `-H 0.0.0.0`으로 두 호스트를 모두 받습니다. 한 세션에서 두 호스트를 섞지 마세요.
 
 프로덕션 빌드:
 
 ```bash
+rm -rf .next
 npm run build
 npm start
 ```
+
+`next start` 검증도 공식 URL [http://localhost:43173](http://localhost:43173) 으로 하고, 회귀 확인 시에만 `http://127.0.0.1:43173` 을 추가로 엽니다. 헤드리스만으로 통과를 단정하지 말고, 서리 건너뛰기 후 **토마토 픽셀**과 「과잉 레시피 보기」 **실제 클릭으로 모달이 열리는지**를 확인하세요.
 
 ## 데이터 → 물리
 
