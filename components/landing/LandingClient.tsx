@@ -7,7 +7,7 @@ import { PhysicsStage, type PhysicsStageHandle } from "@/components/landing/Phys
 import { RecipeModal } from "@/components/landing/RecipeModal";
 import { StatsHud } from "@/components/landing/StatsHud";
 import { WipeHint } from "@/components/landing/WipeHint";
-import { isFrostSkipTarget } from "@/lib/frostUi";
+import { isFrostSkipKey } from "@/lib/frostUi";
 import { mapSeriesToPhysics } from "@/lib/mapDataToPhysics";
 import { recipeForSeed } from "@/lib/recipes";
 import type { KamisSeries, Recipe } from "@/lib/types";
@@ -52,15 +52,7 @@ export function LandingClient({ series }: LandingClientProps) {
         return;
       }
       if (recipeRef.current) return;
-      if (event.key === "Escape") {
-        event.preventDefault();
-        skipFrost();
-        return;
-      }
-      if (
-        isFrostSkipTarget(event.target) &&
-        (event.key === "Enter" || event.key === " " || event.code === "Space")
-      ) {
+      if (isFrostSkipKey(event)) {
         event.preventDefault();
         skipFrost();
       }
