@@ -164,9 +164,19 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
       if (!hit) {
         let best = Number.POSITIVE_INFINITY;
         for (const body of runtime.tomatoes) {
-          const radius = bodyRadius(body) + 14;
+          const radius = bodyRadius(body) + 56;
           const dist = Math.hypot(body.position.x - x, body.position.y - y);
           if (dist < radius && dist < best) {
+            best = dist;
+            hit = body;
+          }
+        }
+      }
+      if (!hit) {
+        let best = Number.POSITIVE_INFINITY;
+        for (const body of runtime.tomatoes) {
+          const dist = Math.hypot(body.position.x - x, body.position.y - y);
+          if (dist < 110 && dist < best) {
             best = dist;
             hit = body;
           }
@@ -387,16 +397,29 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
       observer.observe(host);
       window.addEventListener("resize", tryStart);
 
-      const TAP_THRESHOLD = 12;
+      const TAP_THRESHOLD = 18;
       let pointerId: number | null = null;
       let startX = 0;
       let startY = 0;
+      let lastTapAt = 0;
+
+      const emitTap = (clientX: number, clientY: number) => {
+        const now = performance.now();
+        if (now - lastTapAt < 280) return;
+        lastTapAt = now;
+        applyFruitTapRef.current(clientX, clientY);
+      };
 
       const onPointerDown = (event: PointerEvent) => {
         if (event.pointerType === "mouse" && event.button !== 0) return;
         pointerId = event.pointerId;
         startX = event.clientX;
         startY = event.clientY;
+        try {
+          host.setPointerCapture(event.pointerId);
+        } catch {
+          /* optional */
+        }
       };
 
       const onPointerUp = (event: PointerEvent) => {
@@ -404,20 +427,24 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
         pointerId = null;
         const travel = Math.hypot(event.clientX - startX, event.clientY - startY);
         if (travel < TAP_THRESHOLD) {
-          applyFruitTapRef.current(event.clientX, event.clientY);
+          emitTap(event.clientX, event.clientY);
         }
       };
 
-      canvas.addEventListener("pointerdown", onPointerDown);
-      canvas.addEventListener("pointerup", onPointerUp);
-      canvas.addEventListener("pointercancel", onPointerUp);
+      const onClick = (event: MouseEvent) => {
+        emitTap(event.clientX, event.clientY);
+      };
+
+      host.addEventListener("pointerdown", onPointerDown);
+      host.addEventListener("pointerup", onPointerUp);
+      host.addEventListener("click", onClick);
 
       return () => {
         window.cancelAnimationFrame(frame);
         window.removeEventListener("resize", tryStart);
-        canvas.removeEventListener("pointerdown", onPointerDown);
-        canvas.removeEventListener("pointerup", onPointerUp);
-        canvas.removeEventListener("pointercancel", onPointerUp);
+        host.removeEventListener("pointerdown", onPointerDown);
+        host.removeEventListener("pointerup", onPointerUp);
+        host.removeEventListener("click", onClick);
         observer.disconnect();
         Matter.World.clear(world, false);
         Matter.Engine.clear(engine);

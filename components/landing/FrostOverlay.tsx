@@ -315,6 +315,7 @@ export const FrostOverlay = forwardRef<FrostOverlayHandle, FrostOverlayProps>(
         lastY = point.y;
         if (moved > WIPE_DISTANCE || strokeCells > WIPE_STAMPS) {
           enoughWipeRef.current = true;
+          markWiped();
         }
       };
 
