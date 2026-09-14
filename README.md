@@ -49,6 +49,8 @@ npm start
 
 ## KAMIS 교체
 
+랜딩 HUD는 `kamis`면 `공개시세 · 갱신 HH:MM`, 그 외(demo/mock)는 `데모 데이터 · 갱신 HH:MM`입니다.
+
 기본값은 모의 JSON입니다. 실제 KAMIS(또는 프록시)로 바꾸려면:
 
 1. `.env.example` 을 복사해 `.env.local` 을 만듭니다.

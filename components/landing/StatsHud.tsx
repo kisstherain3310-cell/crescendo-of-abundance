@@ -8,9 +8,37 @@ type StatsHudProps = {
   showPhysics?: boolean;
 };
 
+function padClock(hours: number, minutes: number) {
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+/** HH:MM from ISO8601 `updatedAt`, else asOf / day.date. Date-only → local 00:00 (no fake live clock). */
+function formatRefreshClock(...candidates: Array<string | undefined>) {
+  for (const raw of candidates) {
+    if (!raw?.trim()) continue;
+    const value = raw.trim();
+    const dateOnly = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (dateOnly) {
+      const local = new Date(
+        Number(dateOnly[1]),
+        Number(dateOnly[2]) - 1,
+        Number(dateOnly[3]),
+      );
+      return padClock(local.getHours(), local.getMinutes());
+    }
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return padClock(parsed.getHours(), parsed.getMinutes());
+    }
+    const clock = value.match(/(\d{1,2}):(\d{2})/);
+    if (clock) return padClock(Number(clock[1]), Number(clock[2]));
+  }
+  return padClock(0, 0);
+}
+
 export function StatsHud({ physics, showPhysics = false }: StatsHudProps) {
   const crashing = physics.dropRatio >= 0.45;
-  const asOf = physics.updatedAt || physics.day.date;
+  const clock = formatRefreshClock(physics.updatedAt, physics.day.date);
   const demo = physics.source !== "kamis";
 
   return (
@@ -19,8 +47,8 @@ export function StatsHud({ physics, showPhysics = false }: StatsHudProps) {
       aria-label="출하 현황"
     >
       <p className="text-[0.68rem] font-medium tracking-wide text-rose-100/80">
-        {demo ? "데모 데이터" : "KAMIS"}
-        <span className="text-rose-100/50"> · {asOf} 기준</span>
+        {demo ? "데모 데이터" : "공개시세"}
+        <span className="text-rose-100/50"> · 갱신 {clock}</span>
       </p>
       <p className="mt-1 font-serif text-base leading-tight md:text-lg">
         {physics.item}
