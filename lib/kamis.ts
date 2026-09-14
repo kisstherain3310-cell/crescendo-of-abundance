@@ -1,6 +1,6 @@
 import axios from "axios";
 import mockKamis from "@/data/mockKamis.json";
-import type { KamisDay, KamisSeries } from "@/lib/types";
+import type { KamisDay, KamisSeries, KamisSource } from "@/lib/types";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -40,55 +40,82 @@ function normalizeDay(raw: unknown): KamisDay | null {
   return { date, volume, price };
 }
 
-export function normalizeKamis(payload: unknown): KamisSeries {
-  if (payload && typeof payload === "object") {
-    const root = payload as UnknownRecord;
-    const maybeSeries =
-      root.series ??
-      root.data ??
-      (root.data && typeof root.data === "object"
-        ? (root.data as UnknownRecord).item
-        : undefined) ??
-      root.item;
+function pickAsOf(root: UnknownRecord, fallbackSeries: KamisDay[]) {
+  return (
+    asString(root.asOf) ??
+    asString(root.updatedAt) ??
+    asString(root.lastUpdated) ??
+    asString(root.regday) ??
+    fallbackSeries.at(-1)?.date ??
+    new Date().toISOString()
+  );
+}
 
-    const rows = Array.isArray(maybeSeries)
-      ? maybeSeries
-      : Array.isArray(payload)
-        ? payload
-        : [];
-    const series = rows
-      .map(normalizeDay)
-      .filter((day): day is KamisDay => day !== null);
+function tagSeries(
+  series: KamisSeries,
+  source: KamisSource,
+  asOf?: string,
+): KamisSeries {
+  return {
+    ...series,
+    source,
+    asOf: asOf ?? series.asOf ?? series.updatedAt ?? new Date().toISOString(),
+  };
+}
 
-    if (series.length > 0) {
-      return {
-        item: asString(root.item) ?? mockKamis.item,
-        itemCode: asString(root.itemCode) ?? mockKamis.itemCode,
-        market: asString(root.market) ?? mockKamis.market,
-        unit: asString(root.unit) ?? mockKamis.unit,
-        priceUnit: asString(root.priceUnit) ?? mockKamis.priceUnit,
-        series,
-      };
-    }
-  }
+export function demoKamisFallback(): KamisSeries {
+  return tagSeries(mockKamis as KamisSeries, "demo");
+}
 
-  return mockKamis as KamisSeries;
+export function normalizeKamis(payload: unknown): KamisSeries | null {
+  if (!payload || typeof payload !== "object") return null;
+  const root = payload as UnknownRecord;
+  const maybeSeries =
+    root.series ??
+    root.data ??
+    (root.data && typeof root.data === "object"
+      ? (root.data as UnknownRecord).item
+      : undefined) ??
+    root.item;
+
+  const rows = Array.isArray(maybeSeries)
+    ? maybeSeries
+    : Array.isArray(payload)
+      ? payload
+      : [];
+  const series = rows
+    .map(normalizeDay)
+    .filter((day): day is KamisDay => day !== null);
+
+  if (series.length === 0) return null;
+
+  return {
+    item: asString(root.item) ?? mockKamis.item,
+    itemCode: asString(root.itemCode) ?? mockKamis.itemCode,
+    market: asString(root.market) ?? mockKamis.market,
+    unit: asString(root.unit) ?? mockKamis.unit,
+    priceUnit: asString(root.priceUnit) ?? mockKamis.priceUnit,
+    series,
+    asOf: pickAsOf(root, series),
+    updatedAt: asString(root.updatedAt) ?? undefined,
+  };
 }
 
 export async function fetchTomatoSeries(): Promise<KamisSeries> {
+  const fallback = demoKamisFallback();
   const url = process.env.NEXT_PUBLIC_KAMIS_API_URL;
   if (!url) {
-    return mockKamis as KamisSeries;
+    return fallback;
   }
 
   try {
     const { data } = await axios.get(url, { timeout: 4000 });
     const normalized = normalizeKamis(data);
-    if (normalized.series.length === 0) {
-      return mockKamis as KamisSeries;
+    if (!normalized) {
+      return fallback;
     }
-    return normalized;
+    return tagSeries(normalized, "live", normalized.asOf);
   } catch {
-    return mockKamis as KamisSeries;
+    return fallback;
   }
 }

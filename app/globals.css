@@ -62,6 +62,37 @@ body {
   z-index: 30;
   touch-action: none;
   display: block;
+  pointer-events: auto;
+}
+
+#frost-boot-canvas.frost-cleared {
+  pointer-events: none;
+}
+
+@keyframes frost-finger-wipe {
+  0% {
+    transform: translate(-22px, 8px) rotate(-16deg);
+    opacity: 0.18;
+  }
+  45% {
+    opacity: 0.48;
+  }
+  100% {
+    transform: translate(28px, -10px) rotate(10deg);
+    opacity: 0.14;
+  }
+}
+
+.frost-finger-wipe {
+  display: inline-flex;
+  animation: frost-finger-wipe 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frost-finger-wipe {
+    animation: none;
+    display: none;
+  }
 }
 
 .sr-only {
