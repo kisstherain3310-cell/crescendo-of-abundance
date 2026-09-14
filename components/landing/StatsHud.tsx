@@ -1,32 +1,42 @@
 "use client";
 
 import type { KamisSource, PhysicsConfig } from "@/lib/types";
-import { formatUpdatedClock, formatWonPerKg } from "@/lib/utils";
+import { formatPriceLine, formatUpdatedClock } from "@/lib/utils";
 
 type StatsHudProps = {
   physics: PhysicsConfig;
   source?: KamisSource;
-  asOf?: string;
+  updatedAt?: string;
+  unit?: string | null;
+  note?: string | null;
   showPhysics?: boolean;
 };
 
 export function StatsHud({
   physics,
-  source = "demo",
-  asOf,
+  source = "mock",
+  updatedAt,
+  unit,
+  note,
   showPhysics = false,
 }: StatsHudProps) {
-  const clock = formatUpdatedClock(asOf);
+  const clock = formatUpdatedClock(updatedAt);
   const banner =
-    source === "live" ? `공개시세 · 갱신 ${clock}` : `데모 데이터 · 갱신 ${clock}`;
+    source === "kamis"
+      ? `공개시세 · 갱신 ${clock}`
+      : `데모 데이터 · 갱신 ${clock}`;
 
   return (
     <div className="mt-2.5 flex flex-col items-center gap-1 text-center">
       <p className="max-w-full truncate text-[0.75rem] leading-5 text-rose-100/55">
         {banner}
       </p>
-      <p className="text-sm tabular-nums text-rose-50/80">
-        {formatWonPerKg(physics.day.price)}
+      <p className="max-w-full truncate text-sm tabular-nums text-rose-50/80">
+        {formatPriceLine(
+          physics.day.price,
+          unit ?? physics.priceUnit ?? "원/kg",
+          note ?? "참고용·공개시세",
+        )}
       </p>
       {showPhysics ? (
         <p className="text-[0.65rem] tabular-nums text-rose-100/40">

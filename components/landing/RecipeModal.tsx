@@ -67,7 +67,7 @@ export function RecipeModal({ recipe, onClose, onReplay }: RecipeModalProps) {
                 {recipe.whyNow}
               </p>
               <p className="mt-3 text-xs text-rose-100/50">
-                표시 가격은 공개시세 참고용입니다.
+                참고용·공개시세
               </p>
               <div className="mt-5 grid gap-5 sm:grid-cols-2">
                 <section>

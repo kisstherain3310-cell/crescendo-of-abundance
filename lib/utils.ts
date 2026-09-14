@@ -22,7 +22,17 @@ export function formatWon(price: number) {
 }
 
 export function formatWonPerKg(price: number) {
-  return `${Math.round(price).toLocaleString("ko-KR")}원/kg · 참고용`;
+  return formatPriceLine(price, "원/kg", "참고용·공개시세");
+}
+
+export function formatPriceLine(
+  price: number,
+  unit = "원/kg",
+  note = "참고용·공개시세",
+) {
+  const amount = Math.round(price).toLocaleString("ko-KR");
+  const unitLabel = unit.includes("원") ? unit : `원/${unit}`;
+  return `${amount}${unitLabel} · ${note}`;
 }
 
 function parseClockDate(value?: string | Date | null) {

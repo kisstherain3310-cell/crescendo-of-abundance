@@ -46,8 +46,10 @@ export function LandingClient({ series }: LandingClientProps) {
       <Headline onOpenRecipe={() => openRecipe(3)}>
         <StatsHud
           physics={physics}
-          source={series.source ?? "demo"}
-          asOf={series.asOf ?? series.updatedAt}
+          source={series.source ?? "mock"}
+          updatedAt={series.updatedAt}
+          unit={series.items?.[0]?.unit ?? series.priceUnit}
+          note={series.note ?? series.items?.[0]?.note}
           showPhysics={showPhysics}
         />
         <button
