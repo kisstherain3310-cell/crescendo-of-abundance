@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import type { Recipe } from "@/lib/types";
 
 type RecipeModalProps = {
@@ -9,11 +9,15 @@ type RecipeModalProps = {
 };
 
 export function RecipeModal({ recipe, onClose }: RecipeModalProps) {
-  const openedAtRef = useRef(0);
+  const [backdropLive, setBackdropLive] = useState(false);
 
   useEffect(() => {
-    if (!recipe) return;
-    openedAtRef.current = performance.now();
+    if (!recipe) {
+      setBackdropLive(false);
+      return;
+    }
+    setBackdropLive(false);
+    const arm = window.setTimeout(() => setBackdropLive(true), 500);
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -21,15 +25,13 @@ export function RecipeModal({ recipe, onClose }: RecipeModalProps) {
       }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.clearTimeout(arm);
+      window.removeEventListener("keydown", onKey);
+    };
   }, [recipe, onClose]);
 
   if (!recipe) return null;
-
-  const closeUnlessOpeningGesture = () => {
-    if (performance.now() - openedAtRef.current < 450) return;
-    onClose();
-  };
 
   return (
     <div
@@ -37,18 +39,15 @@ export function RecipeModal({ recipe, onClose }: RecipeModalProps) {
       role="dialog"
       aria-modal="true"
       aria-labelledby="recipe-title"
+      data-recipe-modal="1"
       data-frost-ui
     >
-      <button
-        type="button"
-        className="absolute inset-0 bg-black/70 backdrop-blur-[2px]"
-        aria-label="레시피 닫기"
-        onClick={closeUnlessOpeningGesture}
-        onPointerDown={(event) => {
-          if (performance.now() - openedAtRef.current < 450) {
-            event.preventDefault();
-          }
-        }}
+      <div
+        className={`absolute inset-0 bg-black/70 backdrop-blur-[2px] ${
+          backdropLive ? "pointer-events-auto" : "pointer-events-none"
+        }`}
+        onClick={backdropLive ? onClose : undefined}
+        aria-hidden
       />
       <div className="relative z-10 max-h-[min(88dvh,40rem)] w-[min(92vw,34rem)] overflow-auto rounded-2xl border border-rose-200/20 bg-[#2a1216] p-6 text-rose-50 shadow-lg">
         <button

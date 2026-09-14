@@ -1,7 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-
 type HeadlineProps = {
   onOpenRecipe: () => void;
 };
@@ -23,16 +21,20 @@ export function Headline({ onOpenRecipe }: HeadlineProps) {
         </span>
       </h1>
       <div className="pointer-events-auto relative z-[80] mt-5 sm:mt-8" data-frost-ui>
-        <Button
+        <button
           id="open-recipe-cta"
           type="button"
           data-frost-chrome
           onPointerDown={(event) => event.stopPropagation()}
-          onClick={onOpenRecipe}
-          className="relative z-[80] h-11 rounded-full bg-primary px-6 text-[0.95rem] font-semibold text-primary-foreground shadow-[0_10px_40px_rgba(80,0,20,0.35)] hover:bg-primary/90"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onOpenRecipe();
+          }}
+          className="relative z-[80] inline-flex h-11 items-center justify-center rounded-full bg-primary px-6 text-[0.95rem] font-semibold text-primary-foreground shadow-[0_10px_40px_rgba(80,0,20,0.35)] hover:bg-primary/90"
         >
           과잉 레시피 보기
-        </Button>
+        </button>
       </div>
     </header>
   );

@@ -2,15 +2,41 @@
 
 import {
   forwardRef,
-  useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useRef,
+  useState,
 } from "react";
 import MatterNS from "matter-js";
 import { swatchAt } from "@/lib/tomatoPalette";
 import type { PhysicsConfig, TomatoSwatch } from "@/lib/types";
 
-const Matter = (MatterNS as typeof MatterNS & { default?: typeof MatterNS }).default ?? MatterNS;
+type MatterLib = {
+  Engine: typeof MatterNS.Engine;
+  World: typeof MatterNS.World;
+  Composite: typeof MatterNS.Composite;
+  Bodies: typeof MatterNS.Bodies;
+  Body: typeof MatterNS.Body;
+  Query: typeof MatterNS.Query;
+};
+
+function resolveMatter(): MatterLib | null {
+  const root = MatterNS as unknown as { default?: unknown } & Record<string, unknown>;
+  const candidates = [root, root.default];
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== "object") continue;
+    const pack = candidate as Partial<MatterLib>;
+    if (
+      typeof pack.Engine?.create === "function" &&
+      typeof pack.Bodies?.circle === "function" &&
+      typeof pack.Composite?.add === "function" &&
+      typeof pack.Body?.setVelocity === "function"
+    ) {
+      return pack as MatterLib;
+    }
+  }
+  return null;
+}
 
 export type PhysicsStageHandle = {
   tapAt: (clientX: number, clientY: number) => void;
@@ -27,39 +53,41 @@ type Particle = {
   vx: number;
   vy: number;
   life: number;
-  maxLife: number;
   r: number;
   color: string;
 };
 
-type TomatoBody = Matter.Body & {
+type TomatoSprite = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  r: number;
+  angle: number;
+  spin: number;
   swatchIndex: number;
+  body: MatterNS.Body | null;
 };
 
 const WALL = 80;
 
-function bodyRadius(body: Matter.Body) {
-  return body.circleRadius ?? (body.bounds.max.x - body.bounds.min.x) / 2;
-}
-
 function measureStage(host: HTMLElement) {
   const rect = host.getBoundingClientRect();
   return {
-    cssWidth: Math.max(rect.width, window.innerWidth, 320),
-    cssHeight: Math.max(rect.height, window.innerHeight, 480),
+    cssWidth: Math.max(rect.width || 0, window.innerWidth || 0, 390),
+    cssHeight: Math.max(rect.height || 0, window.innerHeight || 0, 640),
   };
 }
 
 function drawTomato(
   ctx: CanvasRenderingContext2D,
-  body: TomatoBody,
+  tomato: TomatoSprite,
   swatch: TomatoSwatch,
 ) {
-  const radius = Math.max(bodyRadius(body), 12);
-  const { x, y } = body.position;
+  const radius = Math.max(tomato.r, 12);
   ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(body.angle);
+  ctx.translate(tomato.x, tomato.y);
+  ctx.rotate(tomato.angle);
 
   ctx.beginPath();
   ctx.ellipse(4, radius * 0.22, radius * 0.98, radius * 0.86, 0, 0, Math.PI * 2);
@@ -117,7 +145,6 @@ function drawTomato(
   ctx.arc(0, 0, radius * 0.08, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
-
   ctx.restore();
 }
 
@@ -152,33 +179,30 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
     const hostRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const tapRef = useRef(onFruitTap);
+    const [tomatoCount, setTomatoCount] = useState(0);
     const runtimeRef = useRef<{
-      tomatoes: TomatoBody[];
+      tomatoes: TomatoSprite[];
       particles: Particle[];
       cssWidth: number;
       cssHeight: number;
-    } | null>(null);
+    }>({ tomatoes: [], particles: [], cssWidth: 390, cssHeight: 640 });
 
     tapRef.current = onFruitTap;
 
     const tapAtPoint = (clientX: number, clientY: number) => {
       const canvas = canvasRef.current;
       const runtime = runtimeRef.current;
-      if (!canvas || !runtime || runtime.tomatoes.length === 0) return;
+      if (!canvas || runtime.tomatoes.length === 0) return;
       const rect = canvas.getBoundingClientRect();
       const x = clientX - rect.left;
       const y = clientY - rect.top;
-      const hits = Matter.Query.point(runtime.tomatoes, { x, y });
-      let hit = hits[0] as TomatoBody | undefined;
-      if (!hit) {
-        let best = Number.POSITIVE_INFINITY;
-        for (const body of runtime.tomatoes) {
-          const radius = bodyRadius(body) + 36;
-          const dist = Math.hypot(body.position.x - x, body.position.y - y);
-          if (dist < radius && dist < best) {
-            best = dist;
-            hit = body;
-          }
+      let hit: TomatoSprite | undefined;
+      let best = Number.POSITIVE_INFINITY;
+      for (const tomato of runtime.tomatoes) {
+        const dist = Math.hypot(tomato.x - x, tomato.y - y);
+        if (dist < tomato.r + 36 && dist < best) {
+          best = dist;
+          hit = tomato;
         }
       }
       if (!hit) return;
@@ -188,24 +212,21 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
         const angle = (Math.PI * 2 * i) / 18 + Math.random() * 0.4;
         const speed = 2.4 + Math.random() * 3.6;
         runtime.particles.push({
-          x: hit.position.x,
-          y: hit.position.y,
+          x: hit.x,
+          y: hit.y,
           vx: Math.cos(angle) * speed,
           vy: Math.sin(angle) * speed - 1.4,
           life: 1,
-          maxLife: 1,
           r: 2 + Math.random() * 3.2,
           color: i % 3 === 0 ? swatch.spark : swatch.mid,
         });
       }
-      Matter.Body.applyForce(hit, hit.position, {
-        x: (Math.random() - 0.5) * 0.012,
-        y: -0.018,
-      });
+      hit.vy -= 4;
+      hit.vx += (Math.random() - 0.5) * 3;
       tapRef.current({
-        seed: hit.id + hit.swatchIndex * 13,
-        x: hit.position.x,
-        y: hit.position.y,
+        seed: hit.swatchIndex * 13 + Math.round(hit.x + hit.y),
+        x: hit.x,
+        y: hit.y,
       });
     };
 
@@ -213,7 +234,7 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
       tapAt: tapAtPoint,
     }));
 
-    useEffect(() => {
+    useLayoutEffect(() => {
       const host = hostRef.current;
       const canvas = canvasRef.current;
       if (!host || !canvas) return;
@@ -221,15 +242,12 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      const engine = Matter.Engine.create({ enableSleeping: false });
-      engine.gravity.x = 0;
-      engine.gravity.y = Math.min(physics.gravity, 0.12);
-      engine.gravity.scale = 0.001;
-      const world = engine.world;
-      const tomatoes: TomatoBody[] = [];
+      const Matter = resolveMatter();
+      let engine: MatterNS.Engine | null = null;
+      let world: MatterNS.World | null = null;
+      const tomatoes: TomatoSprite[] = [];
       const particles: Particle[] = [];
-      const walls: Matter.Body[] = [];
-      let spawned = false;
+      const walls: MatterNS.Body[] = [];
       let frame = 0;
       let lastWidth = 0;
       let lastHeight = 0;
@@ -238,118 +256,101 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
       runtimeRef.current = {
         tomatoes,
         particles,
-        cssWidth: 0,
-        cssHeight: 0,
+        cssWidth: 390,
+        cssHeight: 640,
       };
 
-      const clearWalls = () => {
-        walls.forEach((wall) => Matter.Composite.remove(world, wall));
-        walls.length = 0;
+      const count = Math.max(physics.bodyCount || 0, 18);
+
+      const spawnSprites = (width: number, height: number) => {
+        if (Matter && world) {
+          tomatoes.forEach((tomato) => {
+            if (tomato.body) Matter.Composite.remove(world as MatterNS.World, tomato.body);
+          });
+        }
+        tomatoes.length = 0;
+        for (let i = 0; i < count; i += 1) {
+          const r = 18 + (i % 5) * 2.4;
+          const x = r + 16 + Math.random() * Math.max(width - r * 2 - 32, 40);
+          const y = 80 + Math.random() * Math.max(height - 180, 160);
+          const sprite: TomatoSprite = {
+            x,
+            y,
+            vx: (Math.random() - 0.5) * 4.5,
+            vy: -2 - Math.random() * 5,
+            r,
+            angle: Math.random() * Math.PI,
+            spin: (Math.random() - 0.5) * 0.18,
+            swatchIndex: i,
+            body: null,
+          };
+          if (Matter && world) {
+            const body = Matter.Bodies.circle(x, y, r, {
+              restitution: physics.restitution,
+              friction: 0.1,
+              frictionAir: 0.045,
+              density: 0.0015,
+              label: "tomato",
+            });
+            Matter.Body.setAngularVelocity(body, sprite.spin);
+            Matter.Body.setVelocity(body, { x: sprite.vx, y: sprite.vy });
+            sprite.body = body;
+            Matter.Composite.add(world, body);
+          }
+          tomatoes.push(sprite);
+        }
+        runtimeRef.current.tomatoes = tomatoes;
+        setTomatoCount(tomatoes.length);
+        canvas.dataset.tomatoCount = String(tomatoes.length);
+        canvas.dataset.physicsReady = tomatoes.length > 0 ? "1" : "0";
       };
 
       const layoutWalls = (width: number, height: number) => {
-        clearWalls();
+        if (!Matter || !world) return;
+        walls.forEach((wall) => Matter.Composite.remove(world as MatterNS.World, wall));
+        walls.length = 0;
         const options = { isStatic: true, restitution: 0.16, friction: 0.35 };
         walls.push(
-          Matter.Bodies.rectangle(
-            width / 2,
-            height + WALL / 2 - 4,
-            width + WALL * 2,
-            WALL,
-            options,
-          ),
+          Matter.Bodies.rectangle(width / 2, height + WALL / 2 - 4, width + WALL * 2, WALL, options),
           Matter.Bodies.rectangle(-WALL / 2, height / 2, WALL, height + WALL * 2, options),
-          Matter.Bodies.rectangle(
-            width + WALL / 2,
-            height / 2,
-            WALL,
-            height + WALL * 2,
-            options,
-          ),
+          Matter.Bodies.rectangle(width + WALL / 2, height / 2, WALL, height + WALL * 2, options),
         );
         Matter.Composite.add(world, walls);
       };
 
-      const spawnTomatoes = (width: number, height: number) => {
-        tomatoes.splice(0, tomatoes.length).forEach((body) => {
-          Matter.Composite.remove(world, body);
-        });
-        const count = Math.max(physics.bodyCount, 18);
-        for (let i = 0; i < count; i += 1) {
-          const radius = 18 + (i % 5) * 2.4;
-          const x = radius + 16 + Math.random() * Math.max(width - radius * 2 - 32, 40);
-          const y = 80 + Math.random() * Math.max(height - 180, 160);
-          const body = Matter.Bodies.circle(x, y, radius, {
-            restitution: physics.restitution,
-            friction: 0.1,
-            frictionAir: 0.045,
-            density: 0.0015,
-            label: "tomato",
-          }) as TomatoBody;
-          body.swatchIndex = i;
-          Matter.Body.setAngularVelocity(body, (Math.random() - 0.5) * 0.18);
-          Matter.Body.setVelocity(body, {
-            x: (Math.random() - 0.5) * 4.5,
-            y: -2 - Math.random() * 5,
-          });
-          tomatoes.push(body);
-        }
-        Matter.Composite.add(world, tomatoes);
-        canvas.dataset.tomatoCount = String(tomatoes.length);
-        canvas.dataset.physicsReady = "1";
-      };
-
       const fit = () => {
         const { cssWidth, cssHeight } = measureStage(host);
-        if (cssWidth < 40 || cssHeight < 40) {
-          return { cssWidth: lastWidth || window.innerWidth, cssHeight: lastHeight || window.innerHeight };
-        }
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
         canvas.width = Math.max(1, Math.floor(cssWidth * dpr));
         canvas.height = Math.max(1, Math.floor(cssHeight * dpr));
         canvas.style.width = `${cssWidth}px`;
         canvas.style.height = `${cssHeight}px`;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        if (runtimeRef.current) {
-          runtimeRef.current.cssWidth = cssWidth;
-          runtimeRef.current.cssHeight = cssHeight;
-        }
+        runtimeRef.current.cssWidth = cssWidth;
+        runtimeRef.current.cssHeight = cssHeight;
         const sizeChanged =
           Math.abs(cssWidth - lastWidth) > 1 || Math.abs(cssHeight - lastHeight) > 1;
-        if (sizeChanged || walls.length === 0) {
+        if (sizeChanged || (Matter && walls.length === 0)) {
           lastWidth = cssWidth;
           lastHeight = cssHeight;
           layoutWalls(cssWidth, cssHeight);
-          tomatoes.forEach((body) => {
-            const radius = bodyRadius(body);
-            const x = Math.min(cssWidth - radius, Math.max(radius, body.position.x));
-            const y = Math.min(cssHeight - radius, Math.max(radius, body.position.y));
-            Matter.Body.setPosition(body, { x, y });
+          tomatoes.forEach((tomato) => {
+            tomato.x = Math.min(cssWidth - tomato.r, Math.max(tomato.r, tomato.x));
+            tomato.y = Math.min(cssHeight - tomato.r, Math.max(tomato.r, tomato.y));
+            if (Matter && tomato.body) {
+              Matter.Body.setPosition(tomato.body, { x: tomato.x, y: tomato.y });
+            }
           });
         }
         return { cssWidth, cssHeight };
       };
 
-      const tick = () => {
-        frame = window.requestAnimationFrame(tick);
-        if (spawned) {
-          Matter.Engine.update(engine, 1000 / 60);
-          nudge += 1;
-          if (tomatoes.length > 0 && nudge % 6 === 0) {
-            for (let k = 0; k < 5; k += 1) {
-              const body = tomatoes[(nudge + k * 19) % tomatoes.length];
-              Matter.Body.setVelocity(body, {
-                x: (Math.random() - 0.5) * 6,
-                y: -3.2 - Math.random() * 6,
-              });
-            }
-          }
-        }
-        const width = runtimeRef.current?.cssWidth || lastWidth || window.innerWidth;
-        const height = runtimeRef.current?.cssHeight || lastHeight || window.innerHeight;
+      const paint = () => {
+        const width = runtimeRef.current.cssWidth;
+        const height = runtimeRef.current.cssHeight;
         drawBackground(ctx, width, height);
-        tomatoes.forEach((body) => {
-          drawTomato(ctx, body, swatchAt(body.swatchIndex));
+        tomatoes.forEach((tomato) => {
+          drawTomato(ctx, tomato, swatchAt(tomato.swatchIndex));
         });
         for (let i = particles.length - 1; i >= 0; i -= 1) {
           const particle = particles[i];
@@ -370,21 +371,91 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
         }
       };
 
-      const tryStart = () => {
-        const { cssWidth, cssHeight } = fit();
-        if (!frame) tick();
-        if (spawned || cssWidth < 40 || cssHeight < 40) return;
-        spawnTomatoes(cssWidth, cssHeight);
-        spawned = true;
+      const stepKinematic = (width: number, height: number) => {
+        tomatoes.forEach((tomato) => {
+          tomato.vy += 0.18;
+          tomato.x += tomato.vx;
+          tomato.y += tomato.vy;
+          tomato.angle += tomato.spin;
+          if (tomato.x < tomato.r) {
+            tomato.x = tomato.r;
+            tomato.vx = Math.abs(tomato.vx) * 0.7;
+          } else if (tomato.x > width - tomato.r) {
+            tomato.x = width - tomato.r;
+            tomato.vx = -Math.abs(tomato.vx) * 0.7;
+          }
+          if (tomato.y > height - tomato.r) {
+            tomato.y = height - tomato.r;
+            tomato.vy = -Math.abs(tomato.vy) * 0.45;
+            tomato.vx *= 0.98;
+          } else if (tomato.y < tomato.r) {
+            tomato.y = tomato.r;
+            tomato.vy = Math.abs(tomato.vy);
+          }
+        });
       };
 
-      tryStart();
-      const kick = window.setTimeout(tryStart, 50);
+      const tick = () => {
+        frame = window.requestAnimationFrame(tick);
+        const width = runtimeRef.current.cssWidth;
+        const height = runtimeRef.current.cssHeight;
+        if (Matter && engine) {
+          Matter.Engine.update(engine, 1000 / 60);
+          nudge += 1;
+          tomatoes.forEach((tomato) => {
+            if (!tomato.body) return;
+            tomato.x = tomato.body.position.x;
+            tomato.y = tomato.body.position.y;
+            tomato.angle = tomato.body.angle;
+          });
+          if (tomatoes.length > 0 && nudge % 6 === 0) {
+            for (let k = 0; k < 5; k += 1) {
+              const tomato = tomatoes[(nudge + k * 19) % tomatoes.length];
+              if (tomato.body) {
+                Matter.Body.setVelocity(tomato.body, {
+                  x: (Math.random() - 0.5) * 6,
+                  y: -3.2 - Math.random() * 6,
+                });
+              }
+            }
+          }
+        } else {
+          stepKinematic(width, height);
+          nudge += 1;
+          if (tomatoes.length > 0 && nudge % 12 === 0) {
+            const tomato = tomatoes[nudge % tomatoes.length];
+            tomato.vy = -4 - Math.random() * 5;
+            tomato.vx += (Math.random() - 0.5) * 3;
+          }
+        }
+        paint();
+      };
+
+      try {
+        if (Matter) {
+          engine = Matter.Engine.create({ enableSleeping: false });
+          engine.gravity.x = 0;
+          engine.gravity.y = Math.min(physics.gravity, 0.12);
+          engine.gravity.scale = 0.001;
+          world = engine.world;
+        }
+      } catch {
+        engine = null;
+        world = null;
+      }
+
+      const { cssWidth, cssHeight } = fit();
+      spawnSprites(cssWidth, cssHeight);
+      paint();
+      tick();
+
       const observer = new ResizeObserver(() => {
-        tryStart();
+        const before = tomatoes.length;
+        fit();
+        if (before === 0) spawnSprites(runtimeRef.current.cssWidth, runtimeRef.current.cssHeight);
       });
       observer.observe(host);
-      window.addEventListener("resize", tryStart);
+      window.addEventListener("resize", fit);
 
       let pointerStartX = 0;
       let pointerStartY = 0;
@@ -400,11 +471,7 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
         pointerStartY = event.clientY;
       };
       const onPointerUp = (event: PointerEvent) => {
-        const travel = Math.hypot(
-          event.clientX - pointerStartX,
-          event.clientY - pointerStartY,
-        );
-        if (travel < 16) {
+        if (Math.hypot(event.clientX - pointerStartX, event.clientY - pointerStartY) < 16) {
           requestTap(event.clientX, event.clientY);
         }
       };
@@ -416,24 +483,30 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
       canvas.addEventListener("click", onClick);
 
       return () => {
-        window.clearTimeout(kick);
         window.cancelAnimationFrame(frame);
-        window.removeEventListener("resize", tryStart);
+        window.removeEventListener("resize", fit);
         canvas.removeEventListener("pointerdown", onPointerDown);
         canvas.removeEventListener("pointerup", onPointerUp);
         canvas.removeEventListener("click", onClick);
         observer.disconnect();
-        Matter.World.clear(world, false);
-        Matter.Engine.clear(engine);
-        runtimeRef.current = null;
+        if (Matter && world && engine) {
+          Matter.World.clear(world, false);
+          Matter.Engine.clear(engine);
+        }
       };
     }, [physics.bodyCount, physics.dropRatio, physics.gravity, physics.restitution]);
 
     return (
-      <div ref={hostRef} className="absolute inset-0 z-0 h-full w-full bg-[#14080b]">
+      <div
+        ref={hostRef}
+        className="absolute inset-0 z-0 h-full w-full bg-[#3a1518]"
+        data-tomato-count={tomatoCount}
+      >
         <canvas
           ref={canvasRef}
           data-physics-stage="1"
+          data-tomato-count={tomatoCount}
+          data-physics-ready={tomatoCount > 0 ? "1" : "0"}
           className="block h-full w-full cursor-pointer"
         />
       </div>

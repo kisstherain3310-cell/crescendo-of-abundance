@@ -7,7 +7,7 @@ import { PhysicsStage, type PhysicsStageHandle } from "@/components/landing/Phys
 import { RecipeModal } from "@/components/landing/RecipeModal";
 import { StatsHud } from "@/components/landing/StatsHud";
 import { WipeHint } from "@/components/landing/WipeHint";
-import { isFrostSkipKey } from "@/lib/frostUi";
+import { isFrostSkipTarget } from "@/lib/frostUi";
 import { mapSeriesToPhysics } from "@/lib/mapDataToPhysics";
 import { recipeForSeed } from "@/lib/recipes";
 import type { KamisSeries, Recipe } from "@/lib/types";
@@ -27,12 +27,7 @@ export function LandingClient({ series }: LandingClientProps) {
   recipeRef.current = recipe;
 
   const openRecipe = useCallback((seed = Date.now()) => {
-    const next = recipeForSeed(seed);
-    // Open after the current pointer/click gesture so a backdrop
-    // does not receive the same mouseup/click and immediately dismiss.
-    window.setTimeout(() => {
-      setRecipe(next);
-    }, 0);
+    setRecipe(recipeForSeed(seed));
   }, []);
 
   const skipFrost = useCallback(() => {
@@ -57,7 +52,15 @@ export function LandingClient({ series }: LandingClientProps) {
         return;
       }
       if (recipeRef.current) return;
-      if (isFrostSkipKey(event)) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        skipFrost();
+        return;
+      }
+      if (
+        isFrostSkipTarget(event.target) &&
+        (event.key === "Enter" || event.key === " " || event.code === "Space")
+      ) {
         event.preventDefault();
         skipFrost();
       }

@@ -204,12 +204,15 @@
 
     window.addEventListener("keydown", function (event) {
       if (window.__FROST_BOOT__ && window.__FROST_BOOT__.cleared) return;
-      if (
-        event.key === "Escape" ||
-        event.key === "Enter" ||
-        event.key === " " ||
-        event.code === "Space"
-      ) {
+      var onSkip =
+        event.target &&
+        event.target.closest &&
+        event.target.closest("#frost-boot-skip, #frost-skip");
+      if (event.key === "Escape") {
+        skip();
+        return;
+      }
+      if (onSkip && (event.key === "Enter" || event.key === " " || event.code === "Space")) {
         event.preventDefault();
         skip();
       }
