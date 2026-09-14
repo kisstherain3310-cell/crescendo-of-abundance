@@ -66,6 +66,11 @@ export function LandingClient({ series }: LandingClientProps) {
 
     window.addEventListener("frost-skip", onCleared);
     window.addEventListener("frost:cleared", onCleared);
+    const onOpenRecipe = (event: Event) => {
+      const detail = (event as CustomEvent<{ seed?: number }>).detail;
+      openRecipe(detail?.seed ?? 3);
+    };
+    window.addEventListener("open-recipe", onOpenRecipe);
     // Capture so Enter/Space skip frost even when a chrome button (CTA, skip)
     // is focused — QA failed when skip only ran on the skip button's keydown.
     document.addEventListener("keydown", onKey, true);
@@ -73,13 +78,18 @@ export function LandingClient({ series }: LandingClientProps) {
     return () => {
       window.removeEventListener("frost-skip", onCleared);
       window.removeEventListener("frost:cleared", onCleared);
+      window.removeEventListener("open-recipe", onOpenRecipe);
       document.removeEventListener("keydown", onKey, true);
       window.removeEventListener("keydown", onKey, true);
     };
-  }, [skipFrost]);
+  }, [openRecipe, skipFrost]);
 
   return (
-    <div className="relative h-[100dvh] min-h-[100svh] w-full overflow-hidden bg-[#14080b]">
+    <div
+      data-body-count={physics.bodyCount}
+      className="relative h-dvh min-h-dvh w-full overflow-hidden bg-transparent"
+      style={{ height: "100dvh", minHeight: "100svh", width: "100%" }}
+    >
       <PhysicsStage
         ref={stageRef}
         physics={physics}

@@ -127,6 +127,8 @@ export function FrostOverlay({
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.restore();
       canvas.style.pointerEvents = "none";
+      canvas.style.opacity = "0";
+      canvas.style.visibility = "hidden";
       markRevealed();
     };
 
@@ -257,7 +259,9 @@ export function FrostOverlay({
   return (
     <canvas
       ref={canvasRef}
-      className="pointer-events-none absolute inset-0 z-10 h-full w-full"
+      className={`pointer-events-none fixed inset-0 z-10 h-[100dvh] w-full ${
+        revealed ? "invisible opacity-0" : ""
+      }`}
       aria-hidden
     />
   );

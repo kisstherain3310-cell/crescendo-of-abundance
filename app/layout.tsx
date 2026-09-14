@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Noto_Sans_KR, Noto_Serif_KR } from "next/font/google";
-import Script from "next/script";
 import "./globals.css";
 
 const notoSans = Noto_Sans_KR({
@@ -29,7 +28,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <head>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-        <Script src="/frost-boot.js" strategy="beforeInteractive" />
+        {/* Native tags so fruit/frost boot without waiting on /_next runtime. */}
+        <script src="/tomato-boot.js" />
+        <script src="/frost-boot.js" />
       </head>
       <body className="min-h-full overflow-hidden bg-[#14080b] font-sans">
         {children}
