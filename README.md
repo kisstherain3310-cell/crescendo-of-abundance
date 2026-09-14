@@ -6,17 +6,16 @@ KAMIS 스타일의 모의 농산물 과잉 출하를 **풍요의 계절**로 읽
 
 ## 실행
 
-공식 스모크 URL은 **http://localhost:43173** 입니다.
+공식 검증 URL은 **http://localhost:43173** 입니다.
 
 ```bash
-rm -rf .next
 npm install
 npm run dev
 ```
 
-브라우저에서 [http://localhost:43173](http://localhost:43173) 을 엽니다. 하드 리로드(캐시 무시) 후 확인하세요.
+브라우저에서 [http://localhost:43173](http://localhost:43173) 을 엽니다.
 
-`http://127.0.0.1:43173` 은 Next 개발 서버가 `localhost`로 떠 있으면 HMR/dev 에셋이 막히거나 이전 탭 캐시가 섞일 수 있습니다. 127로 열었다면 서버를 재시작하고, 가능하면 localhost로 다시 검증하세요. `next.config.ts`의 `allowedDevOrigins`에 두 호스트를 허용해 두었습니다.
+`http://127.0.0.1:43173` 은 Next 개발 서버가 `localhost`로 떠 있으면 HMR/dev 에셋이 막혀 클라이언트가 깨져 보일 수 있습니다. `next.config.ts`의 `allowedDevOrigins`에 `localhost`와 `127.0.0.1`을 허용해 두었고, 스모크는 localhost로 하세요.
 
 프로덕션 빌드:
 
