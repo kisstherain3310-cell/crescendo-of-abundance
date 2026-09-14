@@ -20,9 +20,10 @@ export function Headline({ onOpenRecipe }: HeadlineProps) {
       </h1>
       <div className="pointer-events-auto mt-5 sm:mt-8">
         <Button
+          id="open-recipe-cta"
           type="button"
           onClick={onOpenRecipe}
-          className="h-11 rounded-full border border-white/20 bg-white/12 px-6 text-[0.95rem] text-rose-50 shadow-[0_10px_40px_rgba(80,0,20,0.35)] backdrop-blur-md hover:bg-white/20"
+          className="relative z-50 h-11 rounded-full bg-primary px-6 text-[0.95rem] font-semibold text-primary-foreground shadow-[0_10px_40px_rgba(80,0,20,0.35)] hover:bg-primary/90"
         >
           과잉 레시피 보기
         </Button>

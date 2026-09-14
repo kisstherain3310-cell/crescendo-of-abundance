@@ -19,9 +19,9 @@ function fillFrost(
   height: number,
 ) {
   const gradient = ctx.createLinearGradient(0, 0, width, height);
-  gradient.addColorStop(0, "rgba(236, 246, 255, 0.58)");
-  gradient.addColorStop(0.45, "rgba(214, 232, 245, 0.62)");
-  gradient.addColorStop(1, "rgba(198, 220, 236, 0.66)");
+      gradient.addColorStop(0, "rgba(236, 246, 255, 0.4)");
+      gradient.addColorStop(0.45, "rgba(214, 232, 245, 0.44)");
+      gradient.addColorStop(1, "rgba(198, 220, 236, 0.48)");
   ctx.globalCompositeOperation = "source-over";
   ctx.globalAlpha = 1;
   ctx.fillStyle = gradient;
@@ -41,7 +41,7 @@ function fillFrost(
       image.data[i + 3] = 50 + Math.random() * 40;
     }
     nctx.putImageData(image, 0, 0);
-    ctx.globalAlpha = 0.55;
+    ctx.globalAlpha = 0.32;
     ctx.fillStyle = ctx.createPattern(noise, "repeat") || gradient;
     ctx.fillRect(0, 0, width, height);
     ctx.globalAlpha = 1;

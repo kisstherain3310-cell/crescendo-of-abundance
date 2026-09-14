@@ -40,6 +40,7 @@ export function WipeHint({ hidden, onSkip }: WipeHintProps) {
               {" "}또는 아래 버튼으로 건너뛸 수 있습니다.
             </p>
             <Button
+              id="frost-skip"
               type="button"
               onClick={onSkip}
               className="pointer-events-auto mt-3 h-10 rounded-full border border-white/25 bg-white/15 px-5 text-sm text-rose-50 hover:bg-white/25"

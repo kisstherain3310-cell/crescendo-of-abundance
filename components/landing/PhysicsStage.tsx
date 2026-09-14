@@ -163,7 +163,7 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
       if (!hit) {
         let best = Number.POSITIVE_INFINITY;
         for (const body of runtime.tomatoes) {
-          const radius = bodyRadius(body) + 14;
+          const radius = bodyRadius(body) + 36;
           const dist = Math.hypot(body.position.x - x, body.position.y - y);
           if (dist < radius && dist < best) {
             best = dist;
@@ -380,6 +380,13 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
 
       let pointerStartX = 0;
       let pointerStartY = 0;
+      let lastTapAt = 0;
+      const requestTap = (clientX: number, clientY: number) => {
+        const now = performance.now();
+        if (now - lastTapAt < 250) return;
+        lastTapAt = now;
+        tapAtPoint(clientX, clientY);
+      };
       const onPointerDown = (event: PointerEvent) => {
         pointerStartX = event.clientX;
         pointerStartY = event.clientY;
@@ -389,18 +396,23 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
           event.clientX - pointerStartX,
           event.clientY - pointerStartY,
         );
-        if (travel < 12) {
-          tapAtPoint(event.clientX, event.clientY);
+        if (travel < 16) {
+          requestTap(event.clientX, event.clientY);
         }
+      };
+      const onClick = (event: MouseEvent) => {
+        requestTap(event.clientX, event.clientY);
       };
       canvas.addEventListener("pointerdown", onPointerDown);
       canvas.addEventListener("pointerup", onPointerUp);
+      canvas.addEventListener("click", onClick);
 
       return () => {
         window.cancelAnimationFrame(frame);
         window.removeEventListener("resize", tryStart);
         canvas.removeEventListener("pointerdown", onPointerDown);
         canvas.removeEventListener("pointerup", onPointerUp);
+        canvas.removeEventListener("click", onClick);
         observer.disconnect();
         Matter.World.clear(world, false);
         Matter.Engine.clear(engine);
