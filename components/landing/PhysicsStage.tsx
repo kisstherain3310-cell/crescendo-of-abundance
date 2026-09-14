@@ -231,7 +231,13 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
     };
 
     useImperativeHandle(ref, () => ({
-      tapAt: tapAtPoint,
+      tapAt(clientX, clientY) {
+        if (runtimeRef.current.tomatoes.length > 0) {
+          tapAtPoint(clientX, clientY);
+          return;
+        }
+        window.__TOMATO_BOOT__?.tapAt(clientX, clientY);
+      },
     }));
 
     useLayoutEffect(() => {
@@ -448,6 +454,7 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
       spawnSprites(cssWidth, cssHeight);
       paint();
       tick();
+      window.__TOMATO_BOOT__?.conceal?.();
 
       const observer = new ResizeObserver(() => {
         const before = tomatoes.length;
@@ -493,13 +500,14 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
           Matter.World.clear(world, false);
           Matter.Engine.clear(engine);
         }
+        window.__TOMATO_BOOT__?.reveal?.();
       };
     }, [physics.bodyCount, physics.dropRatio, physics.gravity, physics.restitution]);
 
     return (
       <div
         ref={hostRef}
-        className="absolute inset-0 z-0 h-full w-full bg-[#3a1518]"
+        className="pointer-events-auto fixed inset-0 z-0 h-[100dvh] w-full bg-transparent"
         data-tomato-count={tomatoCount}
       >
         <canvas

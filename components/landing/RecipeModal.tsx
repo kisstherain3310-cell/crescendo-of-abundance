@@ -25,6 +25,7 @@ export function RecipeModal({ recipe, onClose }: RecipeModalProps) {
       }
     };
     window.addEventListener("keydown", onKey);
+    document.getElementById("recipe-boot-modal")?.remove();
     return () => {
       window.clearTimeout(arm);
       window.removeEventListener("keydown", onKey);
@@ -35,7 +36,7 @@ export function RecipeModal({ recipe, onClose }: RecipeModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-[90] flex items-end justify-center p-3 sm:items-center"
+      className="fixed inset-0 z-[120] flex items-end justify-center p-3 sm:items-center"
       role="dialog"
       aria-modal="true"
       aria-labelledby="recipe-title"
