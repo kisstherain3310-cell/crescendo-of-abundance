@@ -18,7 +18,7 @@ export function Headline({ onOpenRecipe }: HeadlineProps) {
           가장 완벽한 과잉을 소비할 시간.
         </span>
       </h1>
-      <div className="pointer-events-auto mt-5 sm:mt-8">
+      <div className="pointer-events-auto relative z-50 mt-5 sm:mt-8" data-frost-ui>
         <Button
           id="open-recipe-cta"
           type="button"

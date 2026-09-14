@@ -3,6 +3,15 @@
 
   var BRUSH = 56;
 
+  function isChrome(target) {
+    if (!target || !target.closest) return false;
+    return Boolean(
+      target.closest(
+        "button, a, input, textarea, select, label, [data-frost-ui], [role='dialog']",
+      ),
+    );
+  }
+
   function sizeCanvas(canvas) {
     var dpr = Math.min(window.devicePixelRatio || 1, 2);
     var width = window.innerWidth;
@@ -72,32 +81,47 @@
 
   function skip() {
     var boot = window.__FROST_BOOT__;
-    if (!boot || !boot.canvas) return;
-    var ctx = boot.canvas.getContext("2d");
-    if (ctx) {
-      ctx.save();
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, boot.canvas.width, boot.canvas.height);
-      ctx.restore();
+    if (!boot) return;
+    if (boot.canvas) {
+      var ctx = boot.canvas.getContext("2d");
+      if (ctx) {
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, boot.canvas.width, boot.canvas.height);
+        ctx.restore();
+      }
+      boot.canvas.style.pointerEvents = "none";
     }
-    boot.canvas.style.pointerEvents = "none";
     boot.cleared = true;
     hideUi();
+    window.dispatchEvent(new CustomEvent("frost-skip"));
   }
 
   function mountUi() {
     if (document.getElementById("frost-boot-ui")) return;
     var ui = document.createElement("div");
     ui.id = "frost-boot-ui";
+    ui.setAttribute("data-frost-ui", "");
     ui.innerHTML =
       '<div class="frost-boot-card">' +
       '<p class="frost-boot-title">화면을 문질러 서리를 걷어내세요</p>' +
-      '<p class="frost-boot-sub">Esc 키 또는 건너뛰기로 바로 볼 수 있습니다</p>' +
+      '<p class="frost-boot-sub">Esc / Space 또는 건너뛰기로 바로 볼 수 있습니다</p>' +
       '<button type="button" id="frost-boot-skip">서리 걷어내기</button>' +
       "</div>";
     (document.body || document.documentElement).appendChild(ui);
     var button = document.getElementById("frost-boot-skip");
-    if (button) button.addEventListener("click", skip);
+    if (button) {
+      button.addEventListener("click", function (event) {
+        event.preventDefault();
+        skip();
+      });
+      button.addEventListener("keydown", function (event) {
+        if (event.key === " " || event.key === "Enter") {
+          event.preventDefault();
+          skip();
+        }
+      });
+    }
   }
 
   function bindWipe(canvas) {
@@ -112,17 +136,17 @@
       return { x: event.clientX - rect.left, y: event.clientY - rect.top };
     }
 
-    canvas.addEventListener("pointerdown", function (event) {
-      if (window.__FROST_BOOT__ && window.__FROST_BOOT__.cleared) return;
+    document.addEventListener("pointerdown", function (event) {
+      if (!window.__FROST_BOOT__ || window.__FROST_BOOT__.cleared) return;
+      if (isChrome(event.target)) return;
       pointerId = event.pointerId;
-      canvas.setPointerCapture(event.pointerId);
       var point = localPoint(event);
       lastX = point.x;
       lastY = point.y;
       stamp(ctx, point.x, point.y);
     });
 
-    canvas.addEventListener("pointermove", function (event) {
+    document.addEventListener("pointermove", function (event) {
       if (pointerId !== event.pointerId) return;
       var point = localPoint(event);
       var dx = point.x - lastX;
@@ -139,11 +163,10 @@
       lastY = point.y;
     });
 
-    canvas.addEventListener("pointerup", function (event) {
-      if (pointerId !== event.pointerId) return;
+    document.addEventListener("pointerup", function () {
       pointerId = null;
     });
-    canvas.addEventListener("pointercancel", function () {
+    document.addEventListener("pointercancel", function () {
       pointerId = null;
     });
   }
@@ -155,9 +178,10 @@
       canvas.id = "frost-boot-canvas";
       canvas.setAttribute("aria-hidden", "true");
       canvas.style.cssText =
-        "position:fixed;inset:0;width:100%;height:100%;z-index:30;touch-action:none;cursor:crosshair;display:block;";
+        "position:fixed;inset:0;width:100%;height:100%;z-index:20;pointer-events:none;touch-action:none;display:block;";
       (document.body || document.documentElement).appendChild(canvas);
     }
+    canvas.style.pointerEvents = "none";
     fillFrost(canvas);
     bindWipe(canvas);
     mountUi();
@@ -169,7 +193,17 @@
     };
 
     window.addEventListener("keydown", function (event) {
-      if (event.key === "Escape" || event.key === "Enter") {
+      if (window.__FROST_BOOT__ && window.__FROST_BOOT__.cleared) return;
+      var onSkip =
+        event.target &&
+        event.target.closest &&
+        event.target.closest("#frost-boot-skip, #frost-skip");
+      if (event.key === "Escape") {
+        skip();
+        return;
+      }
+      if (onSkip && (event.key === "Enter" || event.key === " ")) {
+        event.preventDefault();
         skip();
       }
     });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { cn } from "@/lib/utils";
+import { isFrostUiTarget } from "@/lib/frostUi";
 
 type FrostOverlayProps = {
   revealed: boolean;
@@ -19,9 +19,9 @@ function fillFrost(
   height: number,
 ) {
   const gradient = ctx.createLinearGradient(0, 0, width, height);
-      gradient.addColorStop(0, "rgba(236, 246, 255, 0.4)");
-      gradient.addColorStop(0.45, "rgba(214, 232, 245, 0.44)");
-      gradient.addColorStop(1, "rgba(198, 220, 236, 0.48)");
+  gradient.addColorStop(0, "rgba(236, 246, 255, 0.4)");
+  gradient.addColorStop(0.45, "rgba(214, 232, 245, 0.44)");
+  gradient.addColorStop(1, "rgba(198, 220, 236, 0.48)");
   ctx.globalCompositeOperation = "source-over";
   ctx.globalAlpha = 1;
   ctx.fillStyle = gradient;
@@ -82,13 +82,7 @@ export function FrostOverlay({
   const onTapRef = useRef(onTap);
   const onRevealedRef = useRef(onRevealed);
   const revealedRef = useRef(revealed);
-  const runtimeRef = useRef<{
-    ctx: CanvasRenderingContext2D;
-    dpr: number;
-    cssWidth: number;
-    cssHeight: number;
-    clearAll: () => void;
-  } | null>(null);
+  const runtimeRef = useRef<{ clearAll: () => void } | null>(null);
 
   onTapRef.current = onTap;
   onRevealedRef.current = onRevealed;
@@ -109,8 +103,6 @@ export function FrostOverlay({
     let lastX = 0;
     let lastY = 0;
     let dpr = 1;
-    let cssWidth = 1;
-    let cssHeight = 1;
 
     const markRevealed = () => {
       if (wiped) return;
@@ -118,17 +110,15 @@ export function FrostOverlay({
       onRevealedRef.current();
     };
 
-    const syncSize = (refill: boolean) => {
+    const syncSize = () => {
       const rect = canvas.getBoundingClientRect();
-      cssWidth = Math.max(1, rect.width);
-      cssHeight = Math.max(1, rect.height);
+      const cssWidth = Math.max(1, rect.width || window.innerWidth);
+      const cssHeight = Math.max(1, rect.height || window.innerHeight);
       dpr = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = Math.max(1, Math.floor(cssWidth * dpr));
       canvas.height = Math.max(1, Math.floor(cssHeight * dpr));
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      if (refill) {
-        fillFrost(ctx, cssWidth, cssHeight);
-      }
+      return { cssWidth, cssHeight };
     };
 
     const clearAll = () => {
@@ -142,10 +132,10 @@ export function FrostOverlay({
 
     const boot = window.__FROST_BOOT__;
     if (revealedRef.current || boot?.cleared) {
-      syncSize(false);
+      syncSize();
       clearAll();
     } else {
-      syncSize(false);
+      const { cssWidth, cssHeight } = syncSize();
       if (boot?.canvas && boot.filled) {
         ctx.drawImage(boot.canvas, 0, 0, cssWidth, cssHeight);
       } else {
@@ -154,19 +144,7 @@ export function FrostOverlay({
     }
     teardownBootLayer();
 
-    runtimeRef.current = {
-      ctx,
-      get dpr() {
-        return dpr;
-      },
-      get cssWidth() {
-        return cssWidth;
-      },
-      get cssHeight() {
-        return cssHeight;
-      },
-      clearAll,
-    };
+    runtimeRef.current = { clearAll };
 
     const localPoint = (event: PointerEvent) => {
       const rect = canvas.getBoundingClientRect();
@@ -177,10 +155,10 @@ export function FrostOverlay({
     };
 
     const hasFrostAt = (x: number, y: number) => {
+      if (canvas.width < 2 || canvas.height < 2) return false;
       const px = Math.min(canvas.width - 1, Math.max(0, Math.floor(x * dpr)));
       const py = Math.min(canvas.height - 1, Math.max(0, Math.floor(y * dpr)));
-      const alpha = ctx.getImageData(px, py, 1, 1).data[3];
-      return alpha > FROST_ALPHA;
+      return ctx.getImageData(px, py, 1, 1).data[3] > FROST_ALPHA;
     };
 
     const stamp = (x: number, y: number) => {
@@ -192,15 +170,13 @@ export function FrostOverlay({
     };
 
     const onPointerDown = (event: PointerEvent) => {
-      if (revealedRef.current) return;
+      if (revealedRef.current || isFrostUiTarget(event.target)) return;
       const point = localPoint(event);
       if (!hasFrostAt(point.x, point.y)) {
         onTapRef.current(event.clientX, event.clientY);
         return;
       }
-      event.preventDefault();
       pointerId = event.pointerId;
-      canvas.setPointerCapture(event.pointerId);
       startX = point.x;
       startY = point.y;
       lastX = point.x;
@@ -231,6 +207,7 @@ export function FrostOverlay({
     const onPointerUp = (event: PointerEvent) => {
       if (pointerId !== event.pointerId) return;
       pointerId = null;
+      if (isFrostUiTarget(event.target)) return;
       const point = localPoint(event);
       const travel = Math.hypot(point.x - startX, point.y - startY);
       if (travel < TAP_THRESHOLD && moved < TAP_THRESHOLD) {
@@ -238,10 +215,12 @@ export function FrostOverlay({
       }
     };
 
-    canvas.addEventListener("pointerdown", onPointerDown);
-    canvas.addEventListener("pointermove", onPointerMove);
-    canvas.addEventListener("pointerup", onPointerUp);
-    canvas.addEventListener("pointercancel", onPointerUp);
+    // Frost is paint-only. Wipe from the document so chrome (CTA/skip) stays clickable
+    // even if a leftover boot canvas is still stacked above the React tree.
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
+    document.addEventListener("pointercancel", onPointerUp);
 
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     if (reduceMotion.matches) {
@@ -249,10 +228,10 @@ export function FrostOverlay({
     }
 
     return () => {
-      canvas.removeEventListener("pointerdown", onPointerDown);
-      canvas.removeEventListener("pointermove", onPointerMove);
-      canvas.removeEventListener("pointerup", onPointerUp);
-      canvas.removeEventListener("pointercancel", onPointerUp);
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", onPointerUp);
+      document.removeEventListener("pointercancel", onPointerUp);
       runtimeRef.current = null;
     };
   }, []);
@@ -265,10 +244,7 @@ export function FrostOverlay({
   return (
     <canvas
       ref={canvasRef}
-      className={cn(
-        "absolute inset-0 z-20 h-full w-full touch-none",
-        revealed ? "pointer-events-none" : "pointer-events-auto cursor-crosshair",
-      )}
+      className="pointer-events-none absolute inset-0 z-20 h-full w-full"
       aria-hidden
     />
   );

@@ -6,9 +6,11 @@ import {
   useImperativeHandle,
   useRef,
 } from "react";
-import Matter from "matter-js";
+import MatterNS from "matter-js";
 import { swatchAt } from "@/lib/tomatoPalette";
 import type { PhysicsConfig, TomatoSwatch } from "@/lib/types";
+
+const Matter = (MatterNS as typeof MatterNS & { default?: typeof MatterNS }).default ?? MatterNS;
 
 export type PhysicsStageHandle = {
   tapAt: (clientX: number, clientY: number) => void;
@@ -38,6 +40,14 @@ const WALL = 80;
 
 function bodyRadius(body: Matter.Body) {
   return body.circleRadius ?? (body.bounds.max.x - body.bounds.min.x) / 2;
+}
+
+function measureStage(host: HTMLElement) {
+  const rect = host.getBoundingClientRect();
+  return {
+    cssWidth: Math.max(rect.width, window.innerWidth, 320),
+    cssHeight: Math.max(rect.height, window.innerHeight, 480),
+  };
 }
 
 function drawTomato(
@@ -154,7 +164,7 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
     const tapAtPoint = (clientX: number, clientY: number) => {
       const canvas = canvasRef.current;
       const runtime = runtimeRef.current;
-      if (!canvas || !runtime) return;
+      if (!canvas || !runtime || runtime.tomatoes.length === 0) return;
       const rect = canvas.getBoundingClientRect();
       const x = clientX - rect.left;
       const y = clientY - rect.top;
@@ -221,7 +231,6 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
       const walls: Matter.Body[] = [];
       let spawned = false;
       let frame = 0;
-      let lastTick = 0;
       let lastWidth = 0;
       let lastHeight = 0;
       let nudge = 0;
@@ -265,11 +274,11 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
         tomatoes.splice(0, tomatoes.length).forEach((body) => {
           Matter.Composite.remove(world, body);
         });
-        const count = physics.bodyCount;
+        const count = Math.max(physics.bodyCount, 18);
         for (let i = 0; i < count; i += 1) {
           const radius = 18 + (i % 5) * 2.4;
           const x = radius + 16 + Math.random() * Math.max(width - radius * 2 - 32, 40);
-          const y = 90 + Math.random() * Math.max(height - 150, 120);
+          const y = 80 + Math.random() * Math.max(height - 180, 160);
           const body = Matter.Bodies.circle(x, y, radius, {
             restitution: physics.restitution,
             friction: 0.1,
@@ -286,15 +295,18 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
           tomatoes.push(body);
         }
         Matter.Composite.add(world, tomatoes);
+        canvas.dataset.tomatoCount = String(tomatoes.length);
+        canvas.dataset.physicsReady = "1";
       };
 
       const fit = () => {
-        const rect = host.getBoundingClientRect();
-        const cssWidth = Math.max(1, rect.width);
-        const cssHeight = Math.max(1, rect.height);
+        const { cssWidth, cssHeight } = measureStage(host);
+        if (cssWidth < 40 || cssHeight < 40) {
+          return { cssWidth: lastWidth || window.innerWidth, cssHeight: lastHeight || window.innerHeight };
+        }
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        canvas.width = Math.floor(cssWidth * dpr);
-        canvas.height = Math.floor(cssHeight * dpr);
+        canvas.width = Math.max(1, Math.floor(cssWidth * dpr));
+        canvas.height = Math.max(1, Math.floor(cssHeight * dpr));
         canvas.style.width = `${cssWidth}px`;
         canvas.style.height = `${cssHeight}px`;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -318,7 +330,7 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
         return { cssWidth, cssHeight };
       };
 
-      const tick = (now: number) => {
+      const tick = () => {
         frame = window.requestAnimationFrame(tick);
         if (spawned) {
           Matter.Engine.update(engine, 1000 / 60);
@@ -333,8 +345,8 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
             }
           }
         }
-        const width = runtimeRef.current?.cssWidth ?? 1;
-        const height = runtimeRef.current?.cssHeight ?? 1;
+        const width = runtimeRef.current?.cssWidth || lastWidth || window.innerWidth;
+        const height = runtimeRef.current?.cssHeight || lastHeight || window.innerHeight;
         drawBackground(ctx, width, height);
         tomatoes.forEach((body) => {
           drawTomato(ctx, body, swatchAt(body.swatchIndex));
@@ -360,20 +372,16 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
 
       const tryStart = () => {
         const { cssWidth, cssHeight } = fit();
+        if (!frame) tick();
         if (spawned || cssWidth < 40 || cssHeight < 40) return;
         spawnTomatoes(cssWidth, cssHeight);
         spawned = true;
-        lastTick = performance.now();
-        if (!frame) tick(lastTick);
       };
 
       tryStart();
+      const kick = window.setTimeout(tryStart, 50);
       const observer = new ResizeObserver(() => {
-        if (!spawned) {
-          tryStart();
-          return;
-        }
-        fit();
+        tryStart();
       });
       observer.observe(host);
       window.addEventListener("resize", tryStart);
@@ -408,6 +416,7 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
       canvas.addEventListener("click", onClick);
 
       return () => {
+        window.clearTimeout(kick);
         window.cancelAnimationFrame(frame);
         window.removeEventListener("resize", tryStart);
         canvas.removeEventListener("pointerdown", onPointerDown);
@@ -421,8 +430,12 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
     }, [physics.bodyCount, physics.dropRatio, physics.gravity, physics.restitution]);
 
     return (
-      <div ref={hostRef} className="absolute inset-0 z-0 bg-[#14080b]">
-        <canvas ref={canvasRef} className="block h-full w-full cursor-pointer" />
+      <div ref={hostRef} className="absolute inset-0 z-0 h-full w-full bg-[#14080b]">
+        <canvas
+          ref={canvasRef}
+          data-physics-stage="1"
+          className="block h-full w-full cursor-pointer"
+        />
       </div>
     );
   },
