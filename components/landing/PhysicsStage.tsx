@@ -7,6 +7,7 @@ import {
   useRef,
 } from "react";
 import Matter from "matter-js";
+import { prefersReducedMotion } from "@/lib/motion";
 import { swatchAt } from "@/lib/tomatoPalette";
 import type { PhysicsConfig, TomatoSwatch } from "@/lib/types";
 
@@ -151,30 +152,40 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
 
     tapRef.current = onFruitTap;
 
-    useImperativeHandle(ref, () => ({
-      tapAt(clientX, clientY) {
-        const canvas = canvasRef.current;
-        const runtime = runtimeRef.current;
-        if (!canvas || !runtime) return;
-        const rect = canvas.getBoundingClientRect();
-        const x = clientX - rect.left;
-        const y = clientY - rect.top;
-        const hits = Matter.Query.point(runtime.tomatoes, { x, y });
-        let hit = hits[0] as TomatoBody | undefined;
-        if (!hit) {
-          let best = Number.POSITIVE_INFINITY;
-          for (const body of runtime.tomatoes) {
-            const radius = bodyRadius(body) + 14;
-            const dist = Math.hypot(body.position.x - x, body.position.y - y);
-            if (dist < radius && dist < best) {
-              best = dist;
-              hit = body;
-            }
+    const applyFruitTap = (clientX: number, clientY: number) => {
+      const canvas = canvasRef.current;
+      const runtime = runtimeRef.current;
+      if (!canvas || !runtime) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = clientX - rect.left;
+      const y = clientY - rect.top;
+      const hits = Matter.Query.point(runtime.tomatoes, { x, y });
+      let hit = hits[0] as TomatoBody | undefined;
+      if (!hit) {
+        let best = Number.POSITIVE_INFINITY;
+        for (const body of runtime.tomatoes) {
+          const radius = bodyRadius(body) + 56;
+          const dist = Math.hypot(body.position.x - x, body.position.y - y);
+          if (dist < radius && dist < best) {
+            best = dist;
+            hit = body;
           }
         }
-        if (!hit) return;
+      }
+      if (!hit) {
+        let best = Number.POSITIVE_INFINITY;
+        for (const body of runtime.tomatoes) {
+          const dist = Math.hypot(body.position.x - x, body.position.y - y);
+          if (dist < 110 && dist < best) {
+            best = dist;
+            hit = body;
+          }
+        }
+      }
+      if (!hit) return;
 
-        const swatch = swatchAt(hit.swatchIndex);
+      const swatch = swatchAt(hit.swatchIndex);
+      if (!prefersReducedMotion()) {
         for (let i = 0; i < 18; i += 1) {
           const angle = (Math.PI * 2 * i) / 18 + Math.random() * 0.4;
           const speed = 2.4 + Math.random() * 3.6;
@@ -193,11 +204,20 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
           x: (Math.random() - 0.5) * 0.012,
           y: -0.018,
         });
-        tapRef.current({
-          seed: hit.id + hit.swatchIndex * 13,
-          x: hit.position.x,
-          y: hit.position.y,
-        });
+      }
+      tapRef.current({
+        seed: hit.id + hit.swatchIndex * 13,
+        x: hit.position.x,
+        y: hit.position.y,
+      });
+    };
+
+    const applyFruitTapRef = useRef(applyFruitTap);
+    applyFruitTapRef.current = applyFruitTap;
+
+    useImperativeHandle(ref, () => ({
+      tapAt(clientX, clientY) {
+        applyFruitTapRef.current(clientX, clientY);
       },
     }));
 
@@ -223,6 +243,7 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
       let lastWidth = 0;
       let lastHeight = 0;
       let nudge = 0;
+      const reduceMotion = prefersReducedMotion();
 
       runtimeRef.current = {
         tomatoes,
@@ -316,12 +337,12 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
         return { cssWidth, cssHeight };
       };
 
-      const tick = (now: number) => {
+      const tick = () => {
         frame = window.requestAnimationFrame(tick);
         if (spawned) {
           Matter.Engine.update(engine, 1000 / 60);
           nudge += 1;
-          if (tomatoes.length > 0 && nudge % 6 === 0) {
+          if (!reduceMotion && tomatoes.length > 0 && nudge % 6 === 0) {
             for (let k = 0; k < 5; k += 1) {
               const body = tomatoes[(nudge + k * 19) % tomatoes.length];
               Matter.Body.setVelocity(body, {
@@ -376,9 +397,54 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
       observer.observe(host);
       window.addEventListener("resize", tryStart);
 
+      const TAP_THRESHOLD = 18;
+      let pointerId: number | null = null;
+      let startX = 0;
+      let startY = 0;
+      let lastTapAt = 0;
+
+      const emitTap = (clientX: number, clientY: number) => {
+        const now = performance.now();
+        if (now - lastTapAt < 280) return;
+        lastTapAt = now;
+        applyFruitTapRef.current(clientX, clientY);
+      };
+
+      const onPointerDown = (event: PointerEvent) => {
+        if (event.pointerType === "mouse" && event.button !== 0) return;
+        pointerId = event.pointerId;
+        startX = event.clientX;
+        startY = event.clientY;
+        try {
+          host.setPointerCapture(event.pointerId);
+        } catch {
+          /* optional */
+        }
+      };
+
+      const onPointerUp = (event: PointerEvent) => {
+        if (pointerId !== event.pointerId) return;
+        pointerId = null;
+        const travel = Math.hypot(event.clientX - startX, event.clientY - startY);
+        if (travel < TAP_THRESHOLD) {
+          emitTap(event.clientX, event.clientY);
+        }
+      };
+
+      const onClick = (event: MouseEvent) => {
+        emitTap(event.clientX, event.clientY);
+      };
+
+      host.addEventListener("pointerdown", onPointerDown);
+      host.addEventListener("pointerup", onPointerUp);
+      host.addEventListener("click", onClick);
+
       return () => {
         window.cancelAnimationFrame(frame);
         window.removeEventListener("resize", tryStart);
+        host.removeEventListener("pointerdown", onPointerDown);
+        host.removeEventListener("pointerup", onPointerUp);
+        host.removeEventListener("click", onClick);
         observer.disconnect();
         Matter.World.clear(world, false);
         Matter.Engine.clear(engine);
@@ -388,7 +454,7 @@ export const PhysicsStage = forwardRef<PhysicsStageHandle, PhysicsStageProps>(
 
     return (
       <div ref={hostRef} className="absolute inset-0 z-0 bg-[#14080b]">
-        <canvas ref={canvasRef} className="block h-full w-full" />
+        <canvas ref={canvasRef} className="block h-full w-full touch-none" />
       </div>
     );
   },

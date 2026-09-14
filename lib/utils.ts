@@ -21,6 +21,38 @@ export function formatWon(price: number) {
   return `${Math.round(price).toLocaleString("ko-KR")}원`;
 }
 
+export function formatWonPerKg(price: number) {
+  return formatPriceLine(price, "원/kg", "참고용·공개시세");
+}
+
+export function formatPriceLine(
+  price: number,
+  unit = "원/kg",
+  note = "참고용·공개시세",
+) {
+  const amount = Math.round(price).toLocaleString("ko-KR");
+  const unitLabel = unit.includes("원") ? unit : `원/${unit}`;
+  return `${amount}${unitLabel} · ${note}`;
+}
+
+function parseClockDate(value?: string | Date | null) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+  return new Date();
+}
+
+export function formatUpdatedClock(value?: string | Date | null) {
+  return new Intl.DateTimeFormat("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Seoul",
+  }).format(parseClockDate(value));
+}
+
 export function median(values: number[]) {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);

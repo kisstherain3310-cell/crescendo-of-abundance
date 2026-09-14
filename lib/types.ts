@@ -4,6 +4,15 @@ export type KamisDay = {
   price: number;
 };
 
+export type KamisSource = "kamis" | "mock";
+
+export type KamisItemSlot = {
+  unit?: string | null;
+  region?: string | null;
+  grade?: string | null;
+  note?: string | null;
+};
+
 export type KamisSeries = {
   item: string;
   itemCode?: string;
@@ -11,6 +20,11 @@ export type KamisSeries = {
   unit: string;
   priceUnit: string;
   series: KamisDay[];
+  source?: KamisSource;
+  asOf?: string;
+  updatedAt?: string;
+  items?: KamisItemSlot[];
+  note?: string | null;
 };
 
 export type PhysicsConfig = {
