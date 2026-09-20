@@ -1,8 +1,3 @@
----
-cursor:
-  subagentId: "bc-cce9f048-978f-5f6e-8d52-a186d1b4c94c"
----
-
 # KAMIS 공공데이터 활용 공모 — 출품 보고서 초안
 
 **작품명:** Crescendo of Abundance — 방울토마토 시세로 읽는 풍요의 물리 시각화  
