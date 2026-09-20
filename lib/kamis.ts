@@ -1,5 +1,6 @@
 import axios from "axios";
 import mockKamis from "@/data/mockKamis.json";
+import { fetchPeriodProductTomato } from "@/lib/kamisUpstream";
 import type { DataSource, KamisDay, KamisSeries } from "@/lib/types";
 
 type UnknownRecord = Record<string, unknown>;
@@ -107,7 +108,6 @@ function resolveProxyUrl(): string | null {
     return `${site.replace(/\/$/, "")}/api/kamis/tomato`;
   }
 
-  // Local netlify dev default
   if (process.env.NETLIFY_DEV === "true" || process.env.CONTEXT === "dev") {
     return "http://localhost:8888/api/kamis/tomato";
   }
@@ -115,33 +115,22 @@ function resolveProxyUrl(): string | null {
   return null;
 }
 
-/**
- * Loads tomato wholesale price series for the landing.
- *
- * Live path: Netlify Function `/api/kamis/tomato` → KAMIS `periodProductList`.
- * Mock path: `data/mockKamis.json` when env/proxy/upstream fails.
- *
- * Price is from KAMIS (or mock). Abundance visualization is derived from
- * price drop in `mapDataToPhysics` — not a direct KAMIS shipment feed.
- */
-export async function fetchTomatoSeries(): Promise<KamisSeries> {
-  const proxyUrl = resolveProxyUrl();
-  if (!proxyUrl) {
-    return withSourceMeta(mockKamis as KamisSeries, "demo");
-  }
+function readServerCerts(): { certKey: string; certId: string } | null {
+  const certKey = process.env.KAMIS_CERT_KEY?.trim();
+  const certId = process.env.KAMIS_CERT_ID?.trim();
+  if (!certKey || !certId) return null;
+  return { certKey, certId };
+}
 
+async function fetchViaProxy(proxyUrl: string): Promise<KamisSeries | null> {
   try {
     const { data, status } = await axios.get(proxyUrl, {
       timeout: 8000,
       validateStatus: () => true,
     });
-    if (status < 200 || status >= 300) {
-      return withSourceMeta(mockKamis as KamisSeries, "demo");
-    }
+    if (status < 200 || status >= 300) return null;
     const normalized = normalizeKamis(data);
-    if (normalized.series.length === 0) {
-      return withSourceMeta(mockKamis as KamisSeries, "demo");
-    }
+    if (normalized.series.length === 0) return null;
     return withSourceMeta(
       {
         ...normalized,
@@ -150,6 +139,47 @@ export async function fetchTomatoSeries(): Promise<KamisSeries> {
       "kamis",
     );
   } catch {
-    return withSourceMeta(mockKamis as KamisSeries, "demo");
+    return null;
   }
+}
+
+async function fetchViaDirectCerts(): Promise<KamisSeries | null> {
+  const certs = readServerCerts();
+  if (!certs) return null;
+  try {
+    const live = await fetchPeriodProductTomato(certs);
+    return withSourceMeta(
+      {
+        ...live,
+        volumeDerivedFromPrice: true,
+      },
+      "kamis",
+    );
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Loads tomato wholesale price series for the landing.
+ *
+ * Live paths (in order):
+ * 1. Netlify Function `/api/kamis/tomato` (preferred; uses Netlify.env)
+ * 2. Direct KAMIS call when `KAMIS_CERT_KEY` / `KAMIS_CERT_ID` are in process.env
+ * 3. `data/mockKamis.json` on failure / missing env
+ *
+ * Price is from KAMIS (or mock). Abundance visualization is derived from
+ * price drop in `mapDataToPhysics` — not a direct KAMIS shipment feed.
+ */
+export async function fetchTomatoSeries(): Promise<KamisSeries> {
+  const proxyUrl = resolveProxyUrl();
+  if (proxyUrl) {
+    const viaProxy = await fetchViaProxy(proxyUrl);
+    if (viaProxy) return viaProxy;
+  }
+
+  const viaDirect = await fetchViaDirectCerts();
+  if (viaDirect) return viaDirect;
+
+  return withSourceMeta(mockKamis as KamisSeries, "demo");
 }

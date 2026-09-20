@@ -92,7 +92,14 @@ KAMIS 일별 품목 도매가 API를 직접 호출하고, 방울토마토(225)�
 | 가격 단위 | 원/kg (`p_convert_kg_yn=Y`) |
 | 시각화 | `priceToBodyCount` + `priceDropToPhysics` |
 
-스크린샷·스모크 영상은 `docs/contest/attachments/` 및 배포 스모크 결과에 추가한다.
+### 첨부 스크린샷 (로컬 스모크, 데모 데이터)
+
+| 파일 | 내용 |
+| --- | --- |
+| `attachments/kamis-smoke-01-frost.png` | 서리 안내 + 토마토 장면 |
+| `attachments/kamis-smoke-02-tomatoes-hud.png` | 서리 제거 후 HUD(`데모 데이터`) |
+| `attachments/kamis-smoke-03-recipe-modal.png` | 과잉 레시피 모달 |
+| `attachments/price-to-physics-mapping.md` | 가격→물리 매핑 표 |
 
 ## 7. 필요 환경변수 (출품자 설정)
 
