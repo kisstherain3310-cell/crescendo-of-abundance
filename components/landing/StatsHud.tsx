@@ -60,8 +60,14 @@ export function StatsHud({ physics, showPhysics = false }: StatsHudProps) {
       </p>
       <dl className="mt-2 grid grid-cols-3 gap-x-2 gap-y-1 text-sm md:mt-3 md:grid-cols-2 md:gap-x-3 md:gap-y-2">
         <div>
-          <dt className="text-[0.65rem] text-rose-100/55">출하량</dt>
-          <dd className="font-medium tabular-nums">{formatKg(physics.day.volume)}</dd>
+          <dt className="text-[0.65rem] text-rose-100/55">
+            {physics.volumeDerivedFromPrice ? "풍요지수" : "출하량"}
+          </dt>
+          <dd className="font-medium tabular-nums">
+            {physics.volumeDerivedFromPrice
+              ? physics.bodyCount
+              : formatKg(physics.day.volume)}
+          </dd>
         </div>
         <div>
           <dt className="text-[0.65rem] text-rose-100/55">도매가</dt>

@@ -1,3 +1,10 @@
 [build]
   command = "npm run build"
   publish = ".next"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# Documented for operators — set real values in the Netlify UI / CLI, never commit secrets.
+# KAMIS_CERT_KEY, KAMIS_CERT_ID

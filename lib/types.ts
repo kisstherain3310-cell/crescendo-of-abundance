@@ -15,6 +15,8 @@ export type KamisSeries = {
   series: KamisDay[];
   source?: DataSource;
   updatedAt?: string;
+  /** True when `volume` is an abundance proxy from price (not KAMIS 출하량). */
+  volumeDerivedFromPrice?: boolean;
 };
 
 export type PhysicsConfig = {
@@ -29,6 +31,8 @@ export type PhysicsConfig = {
   source: DataSource;
   updatedAt: string;
   market?: string;
+  /** Body count / HUD volume came from inverse price, not real shipment kg. */
+  volumeDerivedFromPrice: boolean;
 };
 
 export type TomatoSwatch = {
